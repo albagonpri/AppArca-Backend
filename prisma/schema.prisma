@@ -1,0 +1,64 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+enum EstadoReserva {
+  PENDIENTE
+  CONFIRMADA
+  CANCELADA
+  COMPLETADA
+}
+
+model Usuario {
+  id                 Int       @id @default(autoincrement())
+  nombre             String
+  correo             String    @unique
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
+
+  plazas             Plaza[]
+  reservas           Reserva[]
+
+  @@map("usuarios")
+}
+
+model Plaza {
+  id                 Int       @id @default(autoincrement())
+  propietarioId      Int
+  propietario        Usuario   @relation(fields: [propietarioId], references: [id], onDelete: Cascade)
+  titulo             String
+  descripcion        String?
+  direccion          String
+  latitud            Float
+  longitud           Float
+  precioHora         Float
+  disponible         Boolean   @default(true)
+  fechaCreacion      DateTime  @default(now())
+  fechaActualizacion DateTime  @updatedAt
+
+  reservas           Reserva[]
+
+  @@map("plazas")
+}
+
+model Reserva {
+  id                 Int           @id @default(autoincrement())
+  usuarioId          Int
+  usuario            Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  plazaId            Int
+  plaza              Plaza         @relation(fields: [plazaId], references: [id], onDelete: Cascade)
+  fechaInicio        DateTime
+  fechaFin           DateTime
+  estado             EstadoReserva @default(PENDIENTE)
+  fechaCreacion      DateTime      @default(now())
+  fechaActualizacion DateTime      @updatedAt
+
+  @@map("reservas")
+}
