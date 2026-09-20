@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { EstadoReserva } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service.js';
 import { CrearReservaDto } from '../dto/reservas/crear-reserva.dto.js';
+import { usuarioSelectPublico } from '../models/usuario.model.js';
 
 @Injectable()
 export class ReservasService {
@@ -40,7 +41,9 @@ export class ReservasService {
         estado: EstadoReserva.PENDIENTE,
       },
       include: {
-        usuario: true,
+        usuario: {
+          select: usuarioSelectPublico,
+        },
         plaza: true,
       },
     });
@@ -49,7 +52,9 @@ export class ReservasService {
   async obtenerTodas() {
     return this.prisma.reserva.findMany({
       include: {
-        usuario: true,
+        usuario: {
+          select: usuarioSelectPublico,
+        },
         plaza: true,
       },
       orderBy: { fechaCreacion: 'desc' },
@@ -60,7 +65,9 @@ export class ReservasService {
     const reserva = await this.prisma.reserva.findUnique({
       where: { id },
       include: {
-        usuario: true,
+        usuario: {
+          select: usuarioSelectPublico,
+        },
         plaza: true,
       },
     });

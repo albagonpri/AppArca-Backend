@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import { CrearUsuarioDto } from '../dto/usuarios/crear-usuario.dto.js';
+import { usuarioSelectPublico } from '../models/usuario.model.js';
 
 @Injectable()
 export class UsuariosService {
@@ -20,11 +21,13 @@ export class UsuariosService {
         nombre: dto.nombre,
         correo: dto.correo,
       },
+      select: usuarioSelectPublico,
     });
   }
 
   async obtenerTodos() {
     return this.prisma.usuario.findMany({
+      select: usuarioSelectPublico,
       orderBy: { fechaCreacion: 'desc' },
     });
   }
@@ -32,6 +35,7 @@ export class UsuariosService {
   async obtenerPorId(id: number) {
     const usuario = await this.prisma.usuario.findUnique({
       where: { id },
+      select: usuarioSelectPublico,
     });
 
     if (!usuario) {
