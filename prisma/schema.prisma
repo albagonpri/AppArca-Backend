@@ -20,6 +20,7 @@ model Usuario {
   id                 Int       @id @default(autoincrement())
   nombre             String
   correo             String    @unique
+  contrasenaHash     String?
   fechaCreacion      DateTime  @default(now())
   fechaActualizacion DateTime  @updatedAt
 

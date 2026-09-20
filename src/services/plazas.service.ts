@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service.js';
 import { CrearPlazaDto } from '../dto/plazas/crear-plaza.dto.js';
+import { usuarioSelectPublico } from '../models/usuario.model.js';
 
 @Injectable()
 export class PlazasService {
@@ -26,7 +27,9 @@ export class PlazasService {
         precioHora: dto.precioHora,
       },
       include: {
-        propietario: true,
+        propietario: {
+          select: usuarioSelectPublico,
+        },
       },
     });
   }
@@ -34,7 +37,9 @@ export class PlazasService {
   async obtenerTodas() {
     return this.prisma.plaza.findMany({
       include: {
-        propietario: true,
+        propietario: {
+          select: usuarioSelectPublico,
+        },
       },
       orderBy: { fechaCreacion: 'desc' },
     });
@@ -44,7 +49,9 @@ export class PlazasService {
     const plaza = await this.prisma.plaza.findUnique({
       where: { id },
       include: {
-        propietario: true,
+        propietario: {
+          select: usuarioSelectPublico,
+        },
       },
     });
 
@@ -61,7 +68,9 @@ export class PlazasService {
     return this.prisma.reserva.findMany({
       where: { plazaId },
       include: {
-        usuario: true,
+        usuario: {
+          select: usuarioSelectPublico,
+        },
       },
       orderBy: { fechaCreacion: 'desc' },
     });
