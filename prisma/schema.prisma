@@ -16,18 +16,105 @@ enum EstadoReserva {
   COMPLETADA
 }
 
+enum EtiquetaAmbiental {
+  CERO
+  ECO
+  C
+  B
+  SIN_DISTINTIVO
+}
+
+enum TipoPropulsion {
+  GASOLINA
+  DIESEL
+  HIBRIDO_NO_ENCHUFABLE
+  HIBRIDO_ENCHUFABLE
+  ELECTRICO_PURO
+  OTRO
+}
+
+enum DificultadEntrada {
+  RESALTO
+  ENTRADA_ESTRECHA
+  RAMPA_PRONUNCIADA
+  PENDIENTE_PRONUNCIADA
+  GIRO_CERRADO
+  ALTURA_LIMITADA
+  ANCHURA_LIMITADA
+  OBSTACULOS
+  MANIOBRA_REDUCIDA
+  SUELO_IRREGULAR
+  VEHICULOS_BAJOS
+  OTRA
+}
+
 model Usuario {
   id                 Int       @id @default(autoincrement())
   nombre             String
   correo             String    @unique
   contrasenaHash     String?
+  esAdmin            Boolean   @default(false)
   fechaCreacion      DateTime  @default(now())
   fechaActualizacion DateTime  @updatedAt
 
   plazas             Plaza[]
   reservas           Reserva[]
+  vehiculos          Vehiculo[]
 
   @@map("usuarios")
+}
+
+model Vehiculo {
+  id                 Int                @id @default(autoincrement())
+  usuarioId          Int
+  usuario            Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  marca              String?
+  modelo             String?
+  matricula          String
+  etiquetaAmbiental  EtiquetaAmbiental
+  anyo               Int?
+  version            String?
+  tipoPropulsion     TipoPropulsion?
+  esEnchufable       Boolean            @default(false)
+  longitud           Float?
+  anchura            Float?
+  altura             Float?
+  suspensionBaja     Boolean            @default(false)
+  catalogoVehiculoId Int?
+  catalogoVehiculo   CatalogoVehiculo?  @relation(fields: [catalogoVehiculoId], references: [id], onDelete: SetNull)
+  fechaCreacion      DateTime           @default(now())
+  fechaActualizacion DateTime           @updatedAt
+
+  @@map("vehiculos")
+}
+
+model CatalogoVehiculo {
+  id                  Int                @id @default(autoincrement())
+  marca               String
+  modelo              String
+  generacion          String?
+  anyoInicio          Int?
+  anyoFin             Int?
+  carroceria          String?
+  version             String
+  tipoPropulsion      TipoPropulsion
+  combustibleDetalle  String?
+  potenciaCv          Int?
+  esEnchufable        Boolean            @default(false)
+  etiquetaDgtSugerida EtiquetaAmbiental?
+  etiquetaDgtFiable   Boolean            @default(false)
+  longitud            Float?
+  anchura             Float?
+  altura              Float?
+  origen              String             @default("gor3a/vehicle-makes-models")
+  fechaCreacion       DateTime           @default(now())
+
+  vehiculos           Vehiculo[]
+
+  @@index([marca])
+  @@index([modelo])
+  @@index([marca, modelo])
+  @@map("catalogo_vehiculos")
 }
 
 model Plaza {
@@ -40,6 +127,12 @@ model Plaza {
   latitud            Float
   longitud           Float
   precioHora         Float
+  largo              Float
+  ancho              Float
+  entradaDificil     Boolean             @default(false)
+  descripcionEntrada String?
+  dificultadesEntrada DificultadEntrada[] @default([])
+  tieneCamaras       Boolean             @default(false)
   disponible         Boolean   @default(true)
   fechaCreacion      DateTime  @default(now())
   fechaActualizacion DateTime  @updatedAt

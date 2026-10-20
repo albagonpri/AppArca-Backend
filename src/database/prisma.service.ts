@@ -9,7 +9,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     try {
       await this.$connect();
       this.logger.log('Conexión con PostgreSQL establecida correctamente.');
-    } catch (error) {
+    } catch {
       this.logger.warn(
         'Aviso: No se pudo conectar inmediatamente a PostgreSQL en localhost:5432. ' +
           'El servidor HTTP iniciará normalmente, pero las consultas requerirán que la base de datos esté en ejecución.',

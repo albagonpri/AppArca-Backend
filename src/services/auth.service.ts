@@ -57,6 +57,7 @@ export class AuthService {
     const payload = {
       sub: usuario.id,
       correo: usuario.correo,
+      esAdmin: usuario.esAdmin,
     };
 
     const token = await this.jwtService.signAsync(payload);
@@ -67,6 +68,7 @@ export class AuthService {
         id: usuario.id,
         nombre: usuario.nombre,
         correo: usuario.correo,
+        esAdmin: usuario.esAdmin,
       },
     };
   }
@@ -82,5 +84,32 @@ export class AuthService {
     }
 
     return usuario;
+  }
+  async actualizarPerfil(usuarioId: number, dto: { nombre?: string; correo?: string }) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+    });
+
+    if (!usuario) {
+      throw new UnauthorizedException("Usuario no encontrado");
+    }
+
+    if (dto.correo && dto.correo !== usuario.correo) {
+      const existente = await this.prisma.usuario.findUnique({
+        where: { correo: dto.correo },
+      });
+      if (existente && existente.id !== usuarioId) {
+        throw new ConflictException("Ya existe otro usuario registrado con este correo electrónico");
+      }
+    }
+
+    return this.prisma.usuario.update({
+      where: { id: usuarioId },
+      data: {
+        ...(dto.nombre !== undefined && { nombre: dto.nombre.trim() }),
+        ...(dto.correo !== undefined && { correo: dto.correo.trim() }),
+      },
+      select: usuarioSelectPublico,
+    });
   }
 }
