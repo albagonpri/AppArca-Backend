@@ -11,6 +11,7 @@ import type { Request } from 'express';
 export interface JwtPayload {
   sub: number;
   correo: string;
+  esAdmin?: boolean;
 }
 
 @Injectable()

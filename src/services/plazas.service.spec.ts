@@ -1,0 +1,296 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { BadRequestException } from '@nestjs/common';
+import { DificultadEntrada } from '@prisma/client';
+import { PlazasService } from './plazas.service.js';
+import type { PrismaService } from '../database/prisma.service.js';
+import type { GeocodingService } from './geocoding.service.js';
+import type { CrearPlazaDto } from '../dto/plazas/crear-plaza.dto.js';
+import type { ActualizarPlazaDto } from '../dto/plazas/actualizar-plaza.dto.js';
+
+describe('PlazasService - Dificultades de entrada', () => {
+  let service: PlazasService;
+  let mockPrisma: any;
+  let mockGeocoding: any;
+
+  const baseCrearDto: CrearPlazaDto = {
+    titulo: 'Plaza de prueba',
+    descripcion: 'Plaza en el centro',
+    calle: 'Calle Mayor',
+    numero: '10',
+    codigoPostal: '28013',
+    ciudad: 'Madrid',
+    precioHora: 2.5,
+    largo: 5.0,
+    ancho: 2.5,
+  };
+
+  beforeEach(() => {
+    mockPrisma = {
+      usuario: {
+        findUnique: vi.fn().mockResolvedValue({ id: 1, nombre: 'Juan' }),
+      },
+      plaza: {
+        create: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 1, ...data })),
+        update: vi.fn().mockImplementation(({ data }) => Promise.resolve({ id: 1, ...data })),
+        findUnique: vi.fn(),
+      },
+    };
+
+    mockGeocoding = {
+      geocodificar: vi.fn().mockResolvedValue({ latitud: 40.4168, longitud: -3.7038 }),
+    };
+
+    service = new PlazasService(
+      mockPrisma as unknown as PrismaService,
+      mockGeocoding as unknown as GeocodingService,
+    );
+  });
+
+  describe('crear plaza', () => {
+    it('debe asignar dificultadesEntrada = [] y descripcionEntrada = null si entradaDificil es false', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        entradaDificil: false,
+        dificultadesEntrada: [DificultadEntrada.RAMPA_PRONUNCIADA],
+        descripcionEntrada: 'Texto ignorado',
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            entradaDificil: false,
+            dificultadesEntrada: [],
+            descripcionEntrada: null,
+          }),
+        }),
+      );
+    });
+
+    it('debe lanzar BadRequestException si entradaDificil es true pero dificultadesEntrada está vacío', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        entradaDificil: true,
+        dificultadesEntrada: [],
+      };
+
+      await expect(service.crear(1, dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('debe guardar múltiples dificultades seleccionadas y descripcionEntrada = null si no incluye OTRA', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        entradaDificil: true,
+        dificultadesEntrada: [
+          DificultadEntrada.ENTRADA_ESTRECHA,
+          DificultadEntrada.GIRO_CERRADO,
+          DificultadEntrada.ENTRADA_ESTRECHA, // Duplicado a propósito
+        ],
+        descripcionEntrada: 'No debería guardarse porque no es OTRA',
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            entradaDificil: true,
+            dificultadesEntrada: [
+              DificultadEntrada.ENTRADA_ESTRECHA,
+              DificultadEntrada.GIRO_CERRADO,
+            ],
+            descripcionEntrada: null,
+          }),
+        }),
+      );
+    });
+
+    it('debe lanzar BadRequestException si se selecciona OTRA pero no se proporciona descripcionEntrada', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        entradaDificil: true,
+        dificultadesEntrada: [DificultadEntrada.OTRA],
+        descripcionEntrada: '   ',
+      };
+
+      await expect(service.crear(1, dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('debe guardar OTRA con la descripcionEntrada debidamente recortada (trim)', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        entradaDificil: true,
+        dificultadesEntrada: [
+          DificultadEntrada.RESALTO,
+          DificultadEntrada.OTRA,
+        ],
+        descripcionEntrada: '  Bordillo alto antes de entrar  ',
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            entradaDificil: true,
+            dificultadesEntrada: [
+              DificultadEntrada.RESALTO,
+              DificultadEntrada.OTRA,
+            ],
+            descripcionEntrada: 'Bordillo alto antes de entrar',
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('actualizar plaza', () => {
+    it('debe limpiar dificultades y descripcion cuando entradaDificil pasa a false', async () => {
+      mockPrisma.plaza.findUnique.mockResolvedValue({
+        id: 1,
+        propietarioId: 1,
+        entradaDificil: true,
+        dificultadesEntrada: [DificultadEntrada.ENTRADA_ESTRECHA, DificultadEntrada.OTRA],
+        descripcionEntrada: 'Algo previo',
+      });
+
+      const dto: ActualizarPlazaDto = {
+        entradaDificil: false,
+      };
+
+      await service.actualizar(1, 1, dto);
+
+      expect(mockPrisma.plaza.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({
+            entradaDificil: false,
+            dificultadesEntrada: [],
+            descripcionEntrada: null,
+          }),
+        }),
+      );
+    });
+
+    it('debe lanzar error al editar plaza histórica con entradaDificil = true si no se añaden dificultades', async () => {
+      mockPrisma.plaza.findUnique.mockResolvedValue({
+        id: 1,
+        propietarioId: 1,
+        entradaDificil: true,
+        dificultadesEntrada: [],
+        descripcionEntrada: null,
+      });
+
+      const dto: ActualizarPlazaDto = {
+        titulo: 'Nuevo título',
+      };
+
+      await expect(service.actualizar(1, 1, dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('debe actualizar dificultades conservando la descripción si OTRA sigue presente', async () => {
+      mockPrisma.plaza.findUnique.mockResolvedValue({
+        id: 1,
+        propietarioId: 1,
+        entradaDificil: true,
+        dificultadesEntrada: [DificultadEntrada.OTRA],
+        descripcionEntrada: 'Descripción existente',
+      });
+
+      const dto: ActualizarPlazaDto = {
+        dificultadesEntrada: [DificultadEntrada.OTRA, DificultadEntrada.RAMPA_PRONUNCIADA],
+      };
+
+      await service.actualizar(1, 1, dto);
+
+      expect(mockPrisma.plaza.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            entradaDificil: true,
+            dificultadesEntrada: [DificultadEntrada.OTRA, DificultadEntrada.RAMPA_PRONUNCIADA],
+            descripcionEntrada: 'Descripción existente',
+          }),
+        }),
+      );
+    });
+
+    it('debe eliminar la descripcionEntrada si se retira OTRA de las dificultades', async () => {
+      mockPrisma.plaza.findUnique.mockResolvedValue({
+        id: 1,
+        propietarioId: 1,
+        entradaDificil: true,
+        dificultadesEntrada: [DificultadEntrada.OTRA, DificultadEntrada.RESALTO],
+        descripcionEntrada: 'Descripción existente',
+      });
+
+      const dto: ActualizarPlazaDto = {
+        dificultadesEntrada: [DificultadEntrada.RESALTO],
+      };
+
+      await service.actualizar(1, 1, dto);
+
+      expect(mockPrisma.plaza.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            entradaDificil: true,
+            dificultadesEntrada: [DificultadEntrada.RESALTO],
+            descripcionEntrada: null,
+          }),
+        }),
+      );
+    });
+  });
+  describe("paginacion en plazas", () => {
+    it("debe aplicar skip, take y count al obtener todas las plazas paginadas", async () => {
+      const mockPlazas = [{ id: 2, titulo: "Plaza 2" }, { id: 1, titulo: "Plaza 1" }];
+      mockPrisma.plaza.findMany = vi.fn().mockResolvedValue(mockPlazas);
+      mockPrisma.plaza.count = vi.fn().mockResolvedValue(25);
+
+      const paginacionDto = { page: 2, limit: 10, skip: 10 };
+      const resultado = await service.obtenerTodas(paginacionDto as any);
+
+      expect(mockPrisma.plaza.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          skip: 10,
+          take: 10,
+          orderBy: [{ fechaCreacion: "desc" }, { id: "desc" }],
+        }),
+      );
+      expect(mockPrisma.plaza.count).toHaveBeenCalled();
+      expect(resultado.data).toEqual(mockPlazas);
+      expect(resultado.meta).toEqual({
+        page: 2,
+        limit: 10,
+        total: 25,
+        totalPages: 3,
+        hasNextPage: true,
+        hasPreviousPage: true,
+      });
+    });
+
+    it("debe filtrar por propietarioId y paginar en obtenerMisPlazas", async () => {
+      const mockPlazas = [{ id: 10, propietarioId: 7 }];
+      mockPrisma.plaza.findMany = vi.fn().mockResolvedValue(mockPlazas);
+      mockPrisma.plaza.count = vi.fn().mockResolvedValue(1);
+
+      const paginacionDto = { page: 1, limit: 10, skip: 0 };
+      const resultado = await service.obtenerMisPlazas(7, paginacionDto as any);
+
+      expect(mockPrisma.plaza.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { propietarioId: 7 },
+          skip: 0,
+          take: 10,
+          orderBy: [{ fechaCreacion: "desc" }, { id: "desc" }],
+        }),
+      );
+      expect(mockPrisma.plaza.count).toHaveBeenCalledWith({
+        where: { propietarioId: 7 },
+      });
+      expect(resultado.meta.total).toBe(1);
+      expect(resultado.meta.hasNextPage).toBe(false);
+      expect(resultado.meta.hasPreviousPage).toBe(false);
+    });
+  });
+});
