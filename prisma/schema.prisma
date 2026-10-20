@@ -124,6 +124,7 @@ model Plaza {
   titulo             String
   descripcion        String?
   direccion          String
+  poblacion          String?
   latitud            Float
   longitud           Float
   precioHora         Float

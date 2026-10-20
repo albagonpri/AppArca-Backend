@@ -11,6 +11,8 @@ import {
   IsPositive,
   IsString,
   MaxLength,
+  Min,
+  Max,
 } from "class-validator";
 
 export class CrearPlazaDto {
@@ -73,11 +75,39 @@ export class CrearPlazaDto {
 
   @ApiPropertyOptional({
     example: "Madrid",
+    description: "Población, localidad o pedanía específica",
+  })
+  @IsString({ message: "La población o localidad debe ser un texto" })
+  @IsOptional()
+  poblacion?: string;
+
+  @ApiPropertyOptional({
+    example: "Madrid",
     description: "Provincia",
   })
   @IsString({ message: "La provincia debe ser un texto" })
   @IsOptional()
   provincia?: string;
+
+  @ApiPropertyOptional({
+    example: 40.4168,
+    description: "Latitud confirmada de la plaza en el mapa",
+  })
+  @IsNumber({}, { message: "La latitud debe ser un valor numérico" })
+  @Min(-90, { message: "La latitud debe ser mayor o igual a -90" })
+  @Max(90, { message: "La latitud debe ser menor o igual a 90" })
+  @IsOptional()
+  latitud?: number;
+
+  @ApiPropertyOptional({
+    example: -3.7038,
+    description: "Longitud confirmada de la plaza en el mapa",
+  })
+  @IsNumber({}, { message: "La longitud debe ser un valor numérico" })
+  @Min(-180, { message: "La longitud debe ser mayor o igual a -180" })
+  @Max(180, { message: "La longitud debe ser menor o igual a 180" })
+  @IsOptional()
+  longitud?: number;
 
   @ApiProperty({
     example: 2.5,

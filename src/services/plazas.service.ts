@@ -45,15 +45,23 @@ function construirDireccionLegible(datos: {
   codigoPostal: string;
   ciudad: string;
   provincia?: string;
+  poblacion?: string;
 }): string {
   const calleLimpia = datos.calle.trim();
   const numeroLimpio = datos.numero.trim();
   const cpLimpio = datos.codigoPostal.trim();
   const ciudadLimpia = datos.ciudad.trim();
   const provinciaLimpia = datos.provincia?.trim();
+  const poblacionLimpia = datos.poblacion?.trim();
 
   const via = `${calleLimpia} ${numeroLimpio}`;
-  const localidad = `${cpLimpio} ${ciudadLimpia}`;
+
+  let loc = ciudadLimpia;
+  if (poblacionLimpia && poblacionLimpia.toLowerCase() !== ciudadLimpia.toLowerCase()) {
+    loc = `${poblacionLimpia} (${ciudadLimpia})`;
+  }
+
+  const localidad = `${cpLimpio} ${loc}`;
   return provinciaLimpia
     ? `${via}, ${localidad}, ${provinciaLimpia}`
     : `${via}, ${localidad}`;
@@ -110,6 +118,7 @@ export class PlazasService {
         codigoPostal: dto.codigoPostal,
         ciudad: dto.ciudad,
         provincia: dto.provincia,
+        poblacion: dto.poblacion,
       });
       finalLatitud = coords.latitud;
       finalLongitud = coords.longitud;
@@ -122,6 +131,7 @@ export class PlazasService {
       codigoPostal: dto.codigoPostal,
       ciudad: dto.ciudad,
       provincia: dto.provincia,
+      poblacion: dto.poblacion,
     });
 
     const entradaDificil = dto.entradaDificil ?? false;
@@ -163,6 +173,7 @@ export class PlazasService {
         titulo: dto.titulo,
         descripcion: dto.descripcion,
         direccion: direccionLegible,
+        poblacion: dto.poblacion?.trim() || null,
         latitud: finalLatitud,
         longitud: finalLongitud,
         precioHora: dto.precioHora,
@@ -266,7 +277,11 @@ export class PlazasService {
       dto.numero !== undefined ||
       dto.codigoPostal !== undefined ||
       dto.ciudad !== undefined ||
-      dto.provincia !== undefined;
+      dto.provincia !== undefined ||
+      dto.poblacion !== undefined;
+
+    const intentaModificarCoordenadas =
+      dto.latitud !== undefined || dto.longitud !== undefined;
 
     let nuevaDireccion = plaza.direccion;
     let nuevaLatitud = plaza.latitud;
@@ -299,6 +314,7 @@ export class PlazasService {
           codigoPostal: dto.codigoPostal,
           ciudad: dto.ciudad,
           provincia: dto.provincia,
+          poblacion: dto.poblacion,
         });
         nuevaLatitud = coords.latitud;
         nuevaLongitud = coords.longitud;
@@ -310,7 +326,13 @@ export class PlazasService {
         codigoPostal: dto.codigoPostal,
         ciudad: dto.ciudad,
         provincia: dto.provincia,
+        poblacion: dto.poblacion,
       });
+    } else if (intentaModificarCoordenadas) {
+      // Modificación exclusiva de coordenadas (p. ej. ajuste manual del marcador en mapa)
+      validarCoordenadas(dto.latitud, dto.longitud);
+      nuevaLatitud = dto.latitud!;
+      nuevaLongitud = dto.longitud!;
     }
 
     // Coherencia de entradaDificil, dificultadesEntrada y descripcionEntrada
@@ -378,6 +400,12 @@ export class PlazasService {
         descripcionEntrada: finalDescripcion,
         ...(intentaModificarDireccion && {
           direccion: nuevaDireccion,
+          poblacion:
+            dto.poblacion !== undefined
+              ? dto.poblacion?.trim() || null
+              : plaza.poblacion,
+        }),
+        ...((intentaModificarDireccion || intentaModificarCoordenadas) && {
           latitud: nuevaLatitud,
           longitud: nuevaLongitud,
         }),

@@ -9,6 +9,7 @@ import { UsuariosController } from "./controllers/usuarios.controller.js";
 import { PlazasController } from "./controllers/plazas.controller.js";
 import { ReservasController } from "./controllers/reservas.controller.js";
 import { AdminController } from "./controllers/admin.controller.js";
+import { GeocodificacionController } from "./controllers/geocodificacion.controller.js";
 import { AuthService } from "./services/auth.service.js";
 import { UsuariosService } from "./services/usuarios.service.js";
 import { PlazasService } from "./services/plazas.service.js";
@@ -46,6 +47,7 @@ import { AdminGuard } from "./guards/admin.guard.js";
     PlazasController,
     ReservasController,
     AdminController,
+    GeocodificacionController,
   ],
   providers: [
     AuthService,
