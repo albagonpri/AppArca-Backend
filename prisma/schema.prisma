@@ -24,6 +24,15 @@ enum EtiquetaAmbiental {
   SIN_DISTINTIVO
 }
 
+enum TipoPropulsion {
+  GASOLINA
+  DIESEL
+  HIBRIDO_NO_ENCHUFABLE
+  HIBRIDO_ENCHUFABLE
+  ELECTRICO_PURO
+  OTRO
+}
+
 enum DificultadEntrada {
   RESALTO
   ENTRADA_ESTRECHA
@@ -63,14 +72,49 @@ model Vehiculo {
   modelo             String?
   matricula          String
   etiquetaAmbiental  EtiquetaAmbiental
+  anyo               Int?
+  version            String?
+  tipoPropulsion     TipoPropulsion?
+  esEnchufable       Boolean            @default(false)
   longitud           Float?
   anchura            Float?
   altura             Float?
   suspensionBaja     Boolean            @default(false)
+  catalogoVehiculoId Int?
+  catalogoVehiculo   CatalogoVehiculo?  @relation(fields: [catalogoVehiculoId], references: [id], onDelete: SetNull)
   fechaCreacion      DateTime           @default(now())
   fechaActualizacion DateTime           @updatedAt
 
   @@map("vehiculos")
+}
+
+model CatalogoVehiculo {
+  id                  Int                @id @default(autoincrement())
+  marca               String
+  modelo              String
+  generacion          String?
+  anyoInicio          Int?
+  anyoFin             Int?
+  carroceria          String?
+  version             String
+  tipoPropulsion      TipoPropulsion
+  combustibleDetalle  String?
+  potenciaCv          Int?
+  esEnchufable        Boolean            @default(false)
+  etiquetaDgtSugerida EtiquetaAmbiental?
+  etiquetaDgtFiable   Boolean            @default(false)
+  longitud            Float?
+  anchura             Float?
+  altura              Float?
+  origen              String             @default("gor3a/vehicle-makes-models")
+  fechaCreacion       DateTime           @default(now())
+
+  vehiculos           Vehiculo[]
+
+  @@index([marca])
+  @@index([modelo])
+  @@index([marca, modelo])
+  @@map("catalogo_vehiculos")
 }
 
 model Plaza {

@@ -1,13 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { EtiquetaAmbiental } from '@prisma/client';
+import { EtiquetaAmbiental, TipoPropulsion } from '@prisma/client';
 import {
   IsBoolean,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
+  Min,
 } from 'class-validator';
 
 export class CrearVehiculoDto {
@@ -46,6 +48,42 @@ export class CrearVehiculoDto {
   etiquetaAmbiental: EtiquetaAmbiental;
 
   @ApiPropertyOptional({
+    example: 2021,
+    description: 'Año de fabricación o modelo del vehículo',
+  })
+  @IsInt({ message: 'El año debe ser un número entero' })
+  @Min(1900, { message: 'El año debe ser válido' })
+  @IsOptional()
+  anyo?: number;
+
+  @ApiPropertyOptional({
+    example: '1.8L 122H Active Tech',
+    description: 'Versión o motorización del vehículo',
+  })
+  @IsString({ message: 'La versión debe ser un texto' })
+  @IsOptional()
+  version?: string;
+
+  @ApiPropertyOptional({
+    enum: TipoPropulsion,
+    example: TipoPropulsion.HIBRIDO_NO_ENCHUFABLE,
+    description: 'Tipo de combustible o propulsión del vehículo',
+  })
+  @IsEnum(TipoPropulsion, {
+    message: 'El tipo de propulsión debe ser: GASOLINA, DIESEL, HIBRIDO_NO_ENCHUFABLE, HIBRIDO_ENCHUFABLE, ELECTRICO_PURO u OTRO',
+  })
+  @IsOptional()
+  tipoPropulsion?: TipoPropulsion;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Indica si el vehículo es enchufable (100% eléctrico o híbrido enchufable)',
+  })
+  @IsBoolean({ message: 'esEnchufable debe ser un valor booleano' })
+  @IsOptional()
+  esEnchufable?: boolean;
+
+  @ApiPropertyOptional({
     example: 4.63,
     description: 'Longitud del vehículo en metros',
   })
@@ -79,4 +117,12 @@ export class CrearVehiculoDto {
   @IsBoolean({ message: 'suspensionBaja debe ser un valor booleano' })
   @IsOptional()
   suspensionBaja?: boolean;
+
+  @ApiPropertyOptional({
+    example: 1042,
+    description: 'Identificador del vehículo de referencia en el catálogo',
+  })
+  @IsInt({ message: 'catalogoVehiculoId debe ser un número entero' })
+  @IsOptional()
+  catalogoVehiculoId?: number;
 }

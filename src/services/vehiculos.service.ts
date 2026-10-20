@@ -30,6 +30,9 @@ export class VehiculosService {
         where,
         skip,
         take,
+        include: {
+          catalogoVehiculo: true,
+        },
         orderBy: [{ fechaCreacion: "desc" }, { id: "desc" }],
       }),
       this.prisma.vehiculo.count({ where }),
@@ -41,6 +44,9 @@ export class VehiculosService {
   async obtenerPorId(usuarioId: number, id: number) {
     const vehiculo = await this.prisma.vehiculo.findUnique({
       where: { id },
+      include: {
+        catalogoVehiculo: true,
+      },
     });
 
     if (!vehiculo || vehiculo.usuarioId !== usuarioId) {

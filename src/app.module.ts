@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { DatabaseModule } from "./database/database.module.js";
 import { VehiculosModule } from "./vehiculos.module.js";
+import { CatalogoVehiculosModule } from "./catalogo-vehiculos.module.js";
 import { AuthController } from "./controllers/auth.controller.js";
 import { UsuariosController } from "./controllers/usuarios.controller.js";
 import { PlazasController } from "./controllers/plazas.controller.js";
@@ -37,6 +38,7 @@ import { AdminGuard } from "./guards/admin.guard.js";
     }),
     DatabaseModule,
     VehiculosModule,
+    CatalogoVehiculosModule,
   ],
   controllers: [
     AuthController,
