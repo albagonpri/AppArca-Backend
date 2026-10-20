@@ -12,6 +12,33 @@ import { usuarioSelectPublico, propietarioSelectPublico } from "../models/usuari
 import { GeocodingService } from "./geocoding.service.js";
 import { PaginacionDto, RespuestaPaginada, crearRespuestaPaginada } from "../dto/comun/paginacion.dto.js";
 
+/**
+ * Valida que, si se proporciona una de las coordenadas, se proporcione también la otra,
+ * y que ambas estén dentro de los límites de España (incluyendo Canarias).
+ */
+function validarCoordenadas(latitud?: number, longitud?: number): void {
+  const tieneLatitud = latitud !== undefined && latitud !== null;
+  const tieneLongitud = longitud !== undefined && longitud !== null;
+
+  if (tieneLatitud !== tieneLongitud) {
+    throw new BadRequestException(
+      "Latitud y longitud deben proporcionarse conjuntamente.",
+    );
+  }
+
+  if (tieneLatitud && tieneLongitud) {
+    const lat = latitud as number;
+    const lng = longitud as number;
+    const enEspana =
+      lat >= 27.0 && lat <= 44.5 && lng >= -18.5 && lng <= 5.0;
+    if (!enEspana) {
+      throw new BadRequestException(
+        "Las coordenadas indicadas están fuera del territorio español. Verifica la ubicación en el mapa.",
+      );
+    }
+  }
+}
+
 function construirDireccionLegible(datos: {
   calle: string;
   numero: string;
@@ -65,14 +92,28 @@ export class PlazasService {
       );
     }
 
-    // Geocodificación estricta mediante el servicio desacoplado
-    const coords = await this.geocodingService.geocodificar({
-      calle: dto.calle,
-      numero: dto.numero,
-      codigoPostal: dto.codigoPostal,
-      ciudad: dto.ciudad,
-      provincia: dto.provincia,
-    });
+    // Validar coherencia de coordenadas si se aportan
+    validarCoordenadas(dto.latitud, dto.longitud);
+
+    let finalLatitud: number;
+    let finalLongitud: number;
+
+    if (dto.latitud !== undefined && dto.longitud !== undefined) {
+      // Coordenadas confirmadas por el usuario desde el mapa: se usan directamente
+      finalLatitud = dto.latitud;
+      finalLongitud = dto.longitud;
+    } else {
+      // Sin coordenadas: geocodificar automáticamente con CartoCiudad
+      const coords = await this.geocodingService.geocodificar({
+        calle: dto.calle,
+        numero: dto.numero,
+        codigoPostal: dto.codigoPostal,
+        ciudad: dto.ciudad,
+        provincia: dto.provincia,
+      });
+      finalLatitud = coords.latitud;
+      finalLongitud = coords.longitud;
+    }
 
     // Construcción de la dirección legible exclusivamente en backend
     const direccionLegible = construirDireccionLegible({
@@ -122,8 +163,8 @@ export class PlazasService {
         titulo: dto.titulo,
         descripcion: dto.descripcion,
         direccion: direccionLegible,
-        latitud: coords.latitud,
-        longitud: coords.longitud,
+        latitud: finalLatitud,
+        longitud: finalLongitud,
         precioHora: dto.precioHora,
         largo: dto.largo,
         ancho: dto.ancho,
@@ -243,13 +284,25 @@ export class PlazasService {
         );
       }
 
-      const coords = await this.geocodingService.geocodificar({
-        calle: dto.calle,
-        numero: dto.numero,
-        codigoPostal: dto.codigoPostal,
-        ciudad: dto.ciudad,
-        provincia: dto.provincia,
-      });
+      // Validar coherencia de coordenadas si se aportan
+      validarCoordenadas(dto.latitud, dto.longitud);
+
+      if (dto.latitud !== undefined && dto.longitud !== undefined) {
+        // Coordenadas confirmadas por el usuario desde el mapa: se usan directamente
+        nuevaLatitud = dto.latitud;
+        nuevaLongitud = dto.longitud;
+      } else {
+        // Sin coordenadas confirmadas: geocodificar automáticamente
+        const coords = await this.geocodingService.geocodificar({
+          calle: dto.calle,
+          numero: dto.numero,
+          codigoPostal: dto.codigoPostal,
+          ciudad: dto.ciudad,
+          provincia: dto.provincia,
+        });
+        nuevaLatitud = coords.latitud;
+        nuevaLongitud = coords.longitud;
+      }
 
       nuevaDireccion = construirDireccionLegible({
         calle: dto.calle,
@@ -258,9 +311,6 @@ export class PlazasService {
         ciudad: dto.ciudad,
         provincia: dto.provincia,
       });
-
-      nuevaLatitud = coords.latitud;
-      nuevaLongitud = coords.longitud;
     }
 
     // Coherencia de entradaDificil, dificultadesEntrada y descripcionEntrada
