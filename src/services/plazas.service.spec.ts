@@ -22,6 +22,8 @@ describe('PlazasService - Dificultades de entrada', () => {
     precioHora: 2.5,
     largo: 5.0,
     ancho: 2.5,
+    estaCubierta: true,
+    tieneCargadorElectrico: false,
   };
 
   beforeEach(() => {
@@ -551,5 +553,159 @@ describe('PlazasService - Dificultades de entrada', () => {
       );
     });
   });
+
+  describe('estaCubierta y tieneCargadorElectrico', () => {
+    it('debe guardar estaCubierta y tieneCargadorElectrico al crear una plaza', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        estaCubierta: true,
+        tieneCargadorElectrico: true,
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            estaCubierta: true,
+            tieneCargadorElectrico: true,
+          }),
+        }),
+      );
+    });
+
+    it('debe actualizar estaCubierta y tieneCargadorElectrico al modificar una plaza', async () => {
+      const mockPlaza = {
+        id: 1,
+        propietarioId: 1,
+        estaCubierta: false,
+        tieneCargadorElectrico: false,
+      };
+      mockPrisma.plaza.findUnique = vi.fn().mockResolvedValue(mockPlaza);
+
+      const dto: ActualizarPlazaDto = {
+        estaCubierta: true,
+        tieneCargadorElectrico: false,
+      };
+
+      await service.actualizar(1, 1, dto);
+
+      expect(mockPrisma.plaza.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({
+            estaCubierta: true,
+            tieneCargadorElectrico: false,
+          }),
+        }),
+      );
+    });
+    it('debe guardar numeroPlaza, planta e indicacionesAcceso si se proporcionan', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        numeroPlaza: '42-B',
+        planta: '-2',
+        indicacionesAcceso: 'Entrada por calle norte, rampa izquierda.',
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            numeroPlaza: '42-B',
+            planta: '-2',
+            indicacionesAcceso: 'Entrada por calle norte, rampa izquierda.',
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('actualizar plaza con datos de acceso', () => {
+    it('debe actualizar numeroPlaza, planta e indicacionesAcceso', async () => {
+      const plazaExistente = {
+        id: 1,
+        propietarioId: 1,
+        titulo: 'Plaza',
+        direccion: 'Calle Mayor 10, 28013 Madrid',
+        latitud: 40.4168,
+        longitud: -3.7038,
+        entradaDificil: false,
+        dificultadesEntrada: [],
+        descripcionEntrada: null,
+        numeroPlaza: '12',
+        planta: '-1',
+        indicacionesAcceso: 'Antigua indicación',
+      };
+
+      mockPrisma.plaza.findUnique.mockResolvedValue(plazaExistente);
+
+      const dto: ActualizarPlazaDto = {
+        numeroPlaza: '15',
+        planta: 'Baja',
+        indicacionesAcceso: 'Nueva indicación de acceso detallada.',
+      };
+
+      await service.actualizar(1, 1, dto);
+
+      expect(mockPrisma.plaza.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({
+            numeroPlaza: '15',
+            planta: 'Baja',
+            indicacionesAcceso: 'Nueva indicación de acceso detallada.',
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('filtrado dinámico de plazas (patrón organization.service)', () => {
+    it('debe construir la consulta con filtros booleanos, numéricos y de texto', async () => {
+      mockPrisma.plaza.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.plaza.count = vi.fn().mockResolvedValue(0);
+
+      const filtros = {
+        page: 1,
+        limit: 10,
+        skip: 0,
+        q: 'Madrid',
+        provincia: 'Madrid',
+        estaCubierta: true,
+        tieneCargadorElectrico: true,
+        precioMax: 3.5,
+        largoMin: 4.8,
+      };
+
+      await service.obtenerTodas(filtros as any);
+
+      expect(mockPrisma.plaza.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            disponible: true,
+            estaCubierta: true,
+            tieneCargadorElectrico: true,
+            largo: { gte: 4.8 },
+            precioHora: { lte: 3.5 },
+            AND: expect.arrayContaining([
+              {
+                OR: [
+                  { direccion: { contains: 'Madrid', mode: 'insensitive' } },
+                  { poblacion: { contains: 'Madrid', mode: 'insensitive' } },
+                ],
+              },
+              {
+                direccion: { contains: 'Madrid', mode: 'insensitive' },
+              },
+            ]),
+          }),
+        }),
+      );
+    });
+  });
 });
+
+
 

@@ -90,6 +90,39 @@ export class CrearPlazaDto {
   provincia?: string;
 
   @ApiPropertyOptional({
+    example: "42",
+    description: "Número o identificador de la plaza dentro del aparcamiento",
+  })
+  @IsString({ message: "El número de plaza debe ser un texto" })
+  @MaxLength(50, {
+    message: "El número de plaza no puede superar los 50 caracteres",
+  })
+  @IsOptional()
+  numeroPlaza?: string;
+
+  @ApiPropertyOptional({
+    example: "-1",
+    description: "Planta o nivel en el que se encuentra la plaza",
+  })
+  @IsString({ message: "La planta debe ser un texto" })
+  @MaxLength(50, {
+    message: "La planta no puede superar los 50 caracteres",
+  })
+  @IsOptional()
+  planta?: string;
+
+  @ApiPropertyOptional({
+    example: "Entrar por la rampa derecha y girar a la segunda calle a la izquierda",
+    description: "Indicaciones de acceso detalladas (entrada al garaje, referencias, etc.)",
+  })
+  @IsString({ message: "Las indicaciones de acceso deben ser un texto" })
+  @MaxLength(1000, {
+    message: "Las indicaciones de acceso no pueden superar los 1000 caracteres",
+  })
+  @IsOptional()
+  indicacionesAcceso?: string;
+
+  @ApiPropertyOptional({
     example: 40.4168,
     description: "Latitud confirmada de la plaza en el mapa",
   })
@@ -175,4 +208,20 @@ export class CrearPlazaDto {
   @IsBoolean({ message: "tieneCamaras debe ser un valor booleano" })
   @IsOptional()
   tieneCamaras?: boolean;
+
+  @ApiProperty({
+    example: true,
+    description: "Indica si la plaza de aparcamiento está cubierta o descubierta",
+  })
+  @IsBoolean({ message: "estaCubierta debe ser un valor booleano" })
+  @IsNotEmpty({ message: "El campo estaCubierta es obligatorio" })
+  estaCubierta: boolean;
+
+  @ApiProperty({
+    example: false,
+    description: "Indica si la plaza dispone de un cargador para vehículos eléctricos",
+  })
+  @IsBoolean({ message: "tieneCargadorElectrico debe ser un valor booleano" })
+  @IsNotEmpty({ message: "El campo tieneCargadorElectrico es obligatorio" })
+  tieneCargadorElectrico: boolean;
 }

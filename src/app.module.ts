@@ -10,11 +10,13 @@ import { PlazasController } from "./controllers/plazas.controller.js";
 import { ReservasController } from "./controllers/reservas.controller.js";
 import { AdminController } from "./controllers/admin.controller.js";
 import { GeocodificacionController } from "./controllers/geocodificacion.controller.js";
+import { FavoritosController } from "./controllers/favoritos.controller.js";
 import { AuthService } from "./services/auth.service.js";
 import { UsuariosService } from "./services/usuarios.service.js";
 import { PlazasService } from "./services/plazas.service.js";
 import { ReservasService } from "./services/reservas.service.js";
 import { GeocodingService } from "./services/geocoding.service.js";
+import { FavoritosService } from "./services/favoritos.service.js";
 import { JwtGuard } from "./guards/jwt.guard.js";
 import { AdminGuard } from "./guards/admin.guard.js";
 
@@ -48,6 +50,7 @@ import { AdminGuard } from "./guards/admin.guard.js";
     ReservasController,
     AdminController,
     GeocodificacionController,
+    FavoritosController,
   ],
   providers: [
     AuthService,
@@ -57,6 +60,7 @@ import { AdminGuard } from "./guards/admin.guard.js";
     PlazasService,
     ReservasService,
     GeocodingService,
+    FavoritosService,
   ],
 })
 export class AppModule {}
