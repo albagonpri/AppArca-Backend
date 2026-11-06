@@ -1,6 +1,8 @@
+import { comprobarConfiguracion, cubrePeriodo } from './horario.js';
 import {
   BadRequestException,
   ForbiddenException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -241,6 +243,7 @@ export class PlazasService {
 
     return this.prisma.plaza.create({
       data: {
+        ...(dto.horario !== undefined && { horario: comprobarConfiguracion(dto.horario) }),
         propietarioId,
         titulo: dto.titulo,
         descripcion: dto.descripcion,
@@ -622,9 +625,10 @@ export class PlazasService {
       }
     }
 
-    return this.prisma.plaza.update({
+    const guardar = (db: Prisma.TransactionClient) => db.plaza.update({
       where: { id },
       data: {
+        ...(dto.horario !== undefined && { horario: dto.horario }),
         ...(dto.titulo !== undefined && { titulo: dto.titulo }),
         ...(dto.descripcion !== undefined && { descripcion: dto.descripcion }),
         ...(dto.precioHora !== undefined && { precioHora: dto.precioHora }),
@@ -673,6 +677,26 @@ export class PlazasService {
         },
       },
     });
+    if (dto.horario === undefined && dto.disponible !== false) return guardar(this.prisma);
+    if (dto.horario !== undefined) {
+      if (!plazaPrevia) throw new ForbiddenException('Solo el propietario puede cambiar el horario.');
+      comprobarConfiguracion(dto.horario);
+    }
+    try {
+      return await this.prisma.$transaction(async tx => {
+        const activas = await tx.reserva.findMany({
+          where: { plazaId: id, estado: { in: ['PENDIENTE', 'CONFIRMADA'] }, fechaFin: { gt: new Date() } },
+          select: { fechaInicio: true, fechaFin: true },
+        });
+        if (activas.some(r => dto.disponible === false || !cubrePeriodo(dto.horario, r.fechaInicio, r.fechaFin)))
+          throw new ConflictException('El cambio dejaría fuera de horario una reserva pendiente o confirmada.');
+        return guardar(tx);
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034')
+        throw new ConflictException('Las reservas han cambiado. Revisa el horario e inténtalo de nuevo.');
+      throw error;
+    }
   }
 
   async eliminar(usuarioId: number, id: number) {
