@@ -119,6 +119,7 @@ model CatalogoVehiculo {
 }
 
 model Plaza {
+  horario Json?
   id                 Int       @id @default(autoincrement())
   propietarioId      Int
   propietario        Usuario   @relation(fields: [propietarioId], references: [id], onDelete: Cascade)

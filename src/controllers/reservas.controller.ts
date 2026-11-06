@@ -71,6 +71,11 @@ export class ReservasController {
     );
   }
 
+  @Get("disponibilidad/:plazaId")
+  consultar(@Param("plazaId", ParseIntPipe) id:number, @Query("inicio") inicio:string, @Query("fin") fin:string) {
+    return this.reservasService.consultar(id, inicio, fin);
+  }
+
   @Get(":id")
   @ApiOperation({
     summary: "Obtener una reserva por su ID (requiere ser conductor, propietario de la plaza o administrador)",

@@ -1,92 +1,165 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { PrismaService } from '../database/prisma.service.js';
+import { ReservasService } from './reservas.service.js';
+import { PlazasService } from './plazas.service.js';
+import { GeocodingService } from './geocoding.service.js';
+import type { Horario } from '../models/horario.js';
 
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { Test, TestingModule } from "@nestjs/testing";
-import { ReservasService } from "./reservas.service.js";
-import { PrismaService } from "../database/prisma.service.js";
-import { ConflictException } from "@nestjs/common";
-import { crearUsuario, crearPlaza } from "../test/helpers.js";
-
-/**
- * Integración real contra PostgreSQL (app_arca_test).
- * Verifica que la transacción SERIALIZABLE + retry evita solapamientos simultáneos.
- */
-describe("ReservasService concurrency integration", () => {
-  let moduleRef: TestingModule;
-  let reservasService: ReservasService;
-  let prisma: PrismaService;
-
+describe('Disponibilidad con PostgreSQL', () => {
+  const prisma = new PrismaService({
+    datasourceUrl:
+      process.env.TEST_DATABASE_URL ??
+      'postgresql://postgres:postgres@localhost:5432/app_arca_test',
+  });
+  const reservas = new ReservasService(prisma);
+  const plazas = new PlazasService(prisma, new GeocodingService());
+  const usuarios: number[] = [];
+  let id: number;
+  const horario: Horario = {
+    semana: Array.from({ length: 7 }, () => [
+      { inicio: 480, fin: 840 },
+      { inicio: 960, fin: 1320 },
+    ]),
+    excepciones: [
+      { fecha: '2090-01-11', modo: 'bloquear', franjas: [] },
+      {
+        fecha: '2090-01-12',
+        modo: 'bloquear',
+        franjas: [{ inicio: 600, fin: 780 }],
+      },
+    ],
+  };
+  const dto = (desde: string, hasta: string, dia = '10') => ({
+    usuarioId: usuarios[1],
+    plazaId: id,
+    fechaInicio: '2090-01-' + dia + 'T' + desde + ':00+01:00',
+    fechaFin: '2090-01-' + dia + 'T' + hasta + ':00+01:00',
+  });
   beforeAll(async () => {
-    // Forzar conexión a la BD de test
-    process.env.DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/app_arca_test?schema=public";
-    moduleRef = await Test.createTestingModule({
-      providers: [ReservasService, PrismaService],
-    }).compile();
-    reservasService = moduleRef.get<ReservasService>(ReservasService);
-    prisma = moduleRef.get<PrismaService>(PrismaService);
-    await prisma.$connect();
+    for (const nombre of ['Propietario', 'Conductor A', 'Conductor B']) {
+      const u = await prisma.usuario.create({
+        data: { nombre, correo: randomUUID() + '@example.test' },
+      });
+      usuarios.push(u.id);
+    }
+    const plaza = await plazas.crear(usuarios[0], {
+      titulo: 'Prueba de disponibilidad',
+      calle: 'Calle Prueba',
+      numero: '1',
+      ciudad: 'Madrid',
+      codigoPostal: '28001',
+      latitud: 40.4,
+      longitud: -3.7,
+      largo: 5,
+      ancho: 2,
+      precioHora: 1,
+      horario,
+    });
+    id = plaza.id;
   });
-
-  beforeEach(async () => {
-    // Limpiar tablas entre tests
-    await prisma.reserva.deleteMany();
-    await prisma.plaza.deleteMany();
-    await prisma.usuario.deleteMany();
+  afterAll(async () => {
+    await prisma.usuario.deleteMany({ where: { id: { in: usuarios } } });
+    await prisma.$disconnect();
   });
-
-  it("previene solapamiento de reservas simultáneas (check‑then‑create)", async () => {
-    // Crear usuarios y una plaza
-    const propietario = await crearUsuario(prisma, { correo: "owner@example.com" });
-    const conductor = await crearUsuario(prisma, { correo: "driver@example.com" });
-    const plaza = await crearPlaza(prisma, { propietarioId: propietario.id, disponible: true });
-
-    const dto = {
-      usuarioId: conductor.id,
-      plazaId: plaza.id,
-      fechaInicio: new Date("2030-01-01T10:00:00Z"),
-      fechaFin: new Date("2030-01-01T12:00:00Z"),
+  it('persiste el horario, aplica excepciones y exige propiedad', async () => {
+    expect((await plazas.obtenerPorId(id)).horario).toEqual(horario);
+    await expect(
+      plazas.actualizar(usuarios[1], id, { horario }),
+    ).rejects.toThrow('permiso');
+    const extendido = {
+      ...horario,
+      excepciones: [
+        ...horario.excepciones,
+        {
+          fecha: '2090-01-13',
+          modo: 'ofrecer' as const,
+          franjas: [{ inicio: 300, fin: 420 }],
+        },
+      ],
     };
-
-    // Lanzar dos creaciones concurrentes idénticas
+    await plazas.actualizar(usuarios[0], id, { horario: extendido });
+    await expect(
+      reservas.crear(dto('05:00', '07:00', '13')),
+    ).resolves.toHaveProperty('id');
+    for (const d of [
+      dto('13:00', '15:00'),
+      dto('10:00', '11:00', '11'),
+      dto('09:30', '10:30', '12'),
+    ])
+      await expect(reservas.crear(d)).rejects.toThrow('periodo');
+  });
+  it('serializa solicitudes, permite adyacencia, protege la confirmación y libera al cancelar', async () => {
+    const turno = dto('10:00', '12:00');
     const resultados = await Promise.allSettled([
-      reservasService.crear(dto as any),
-      reservasService.crear(dto as any),
+      reservas.crear(turno),
+      reservas.crear({ ...turno, usuarioId: usuarios[2] }),
     ]);
-
-    const exitos = resultados.filter(r => r.status === "fulfilled");
-    const rechazos = resultados.filter(r => r.status === "rejected");
+    const exitos = resultados.filter((r) => r.status === 'fulfilled');
     expect(exitos).toHaveLength(1);
-    expect(rechazos).toHaveLength(1);
-    const error = (rechazos[0] as PromiseRejectedResult).reason;
-    expect(error).toBeInstanceOf(ConflictException);
+    const reserva = exitos[0].value;
+    for (const d of [dto('09:00', '11:00'), dto('10:30', '11:30'), turno])
+      await expect(reservas.crear(d)).rejects.toThrow('reserva activa');
+    for (const d of [dto('08:00', '10:00'), dto('12:00', '14:00')])
+      await expect(reservas.crear(d)).resolves.toHaveProperty('id');
+    await reservas.actualizarEstadoPorUsuario(
+      reserva.id,
+      usuarios[0],
+      false,
+      'CONFIRMADA',
+    );
+    await expect(
+      plazas.actualizar(usuarios[0], id, {
+        horario: {
+          semana: Array.from({ length: 7 }, () => []),
+          excepciones: [],
+        },
+      }),
+    ).rejects.toThrow('reserva');
+    await reservas.actualizarEstadoPorUsuario(
+      reserva.id,
+      reserva.usuarioId,
+      false,
+      'CANCELADA',
+    );
+    expect(
+      await reservas.consultar(id, turno.fechaInicio, turno.fechaFin),
+    ).toEqual({ disponible: true });
+    await expect(reservas.crear(turno)).resolves.toHaveProperty('id');
+  });
+  it('rechaza fechas pasadas y horarios inválidos enviados directamente', async () => {
+    await expect(
+      reservas.crear({
+        ...dto('08:00', '09:00'),
+        fechaInicio: '2020-01-10T08:00:00Z',
+        fechaFin: '2020-01-10T09:00:00Z',
+      }),
+    ).rejects.toThrow('pasada');
+    const semana = horario.semana.map(() => [
+      { inicio: 480, fin: 600 },
+      { inicio: 570, fin: 720 },
+    ]);
+    await expect(
+      plazas.actualizar(usuarios[0], id, {
+        horario: { semana, excepciones: [] },
+      }),
+    ).rejects.toThrow('solapadas');
   });
 
-  it("previene confirmación simultánea de reservas conflictivas", async () => {
-    const propietario = await crearUsuario(prisma, { correo: "owner2@example.com" });
-    const conductorA = await crearUsuario(prisma, { correo: "driverA@example.com" });
-    const conductorB = await crearUsuario(prisma, { correo: "driverB@example.com" });
-    const plaza = await crearPlaza(prisma, { propietarioId: propietario.id, disponible: true });
-
-    const dtoA = { usuarioId: conductorA.id, plazaId: plaza.id, fechaInicio: new Date("2030-02-01T08:00:00Z"), fechaFin: new Date("2030-02-01T10:00:00Z") };
-    const dtoB = { usuarioId: conductorB.id, plazaId: plaza.id, fechaInicio: new Date("2030-02-01T09:00:00Z"), fechaFin: new Date("2030-02-01T11:00:00Z") };
-
-    const reservaA = await reservasService.crear(dtoA as any);
-    const reservaB = await reservasService.crear(dtoB as any);
-
-    // Intentar confirmar ambas a la vez (propietario lo hace)
-    const confirmar = async (id: number) => {
-      return reservasService.actualizarEstadoPorUsuario(id, propietario.id, "CONFIRMADA");
+  it('serializa el cierre de una fecha frente a una reserva simultánea', async () => {
+    const plaza = await plazas.obtenerPorId(id);
+    const actual = plaza.horario as Horario;
+    const propuesto: Horario = {
+      ...actual,
+      excepciones: [
+        ...actual.excepciones,
+        { fecha: '2090-01-20', modo: 'bloquear', franjas: [] },
+      ],
     };
-
     const resultados = await Promise.allSettled([
-      confirmar(reservaA.id),
-      confirmar(reservaB.id),
+      plazas.actualizar(usuarios[0], id, { horario: propuesto }),
+      reservas.crear(dto('10:00', '12:00', '20')),
     ]);
-
-    const exitos = resultados.filter(r => r.status === "fulfilled");
-    const rechazos = resultados.filter(r => r.status === "rejected");
-    expect(exitos).toHaveLength(1);
-    expect(rechazos).toHaveLength(1);
-    const error = (rechazos[0] as PromiseRejectedResult).reason;
-    expect(error).toBeInstanceOf(ConflictException);
+    expect(resultados.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
   });
 });

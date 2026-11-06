@@ -322,8 +322,8 @@ describe("Seguridad y Autorización en Paginación Multiusuario", () => {
         reservasService.crear({
           usuarioId: USUARIO_A_ID,
           plazaId: 20,
-          fechaInicio: "2026-11-01T10:00:00Z",
-          fechaFin: "2026-11-01T12:00:00Z",
+          fechaInicio: new Date(Date.now() + 86400000).toISOString(),
+          fechaFin: new Date(Date.now() + 93600000).toISOString(),
         }),
       ).rejects.toThrow("La plaza ya cuenta con una reserva activa en las fechas seleccionadas");
     });

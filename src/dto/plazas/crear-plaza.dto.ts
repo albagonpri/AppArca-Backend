@@ -1,7 +1,9 @@
+import type { Horario } from '../../models/horario.js';
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { DificultadEntrada } from "@prisma/client";
 import {
   IsArray,
+  IsObject,
   IsBoolean,
   IsEnum,
   IsInt,
@@ -16,6 +18,10 @@ import {
 } from "class-validator";
 
 export class CrearPlazaDto {
+  @IsOptional()
+  @IsObject()
+  horario?: Horario;
+
   @ApiPropertyOptional({
     example: 1,
     description: "ID del usuario propietario de la plaza (se infiere del token de autenticación)",
