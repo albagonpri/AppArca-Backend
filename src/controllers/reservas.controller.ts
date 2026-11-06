@@ -14,15 +14,13 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
-  ApiQuery,
   ApiResponse,
   ApiTags,
 } from "@nestjs/swagger";
-import { EstadoReserva } from "@prisma/client";
 import { ReservasService } from "../services/reservas.service.js";
 import { CrearReservaDto } from "../dto/reservas/crear-reserva.dto.js";
 import { ActualizarEstadoReservaDto } from "../dto/reservas/actualizar-estado-reserva.dto.js";
-import { PaginacionDto } from "../dto/comun/paginacion.dto.js";
+import { FiltrarReservasDto } from "../dto/reservas/filtrar-reservas.dto.js";
 import { JwtGuard, type JwtPayload } from "../guards/jwt.guard.js";
 import { UsuarioActual } from "../decorators/usuario-actual.decorator.js";
 
@@ -59,31 +57,17 @@ export class ReservasController {
   @ApiOperation({
     summary: "Obtener las reservas del usuario autenticado (propias o recibidas) de forma paginada",
   })
-  @ApiQuery({
-    name: "tipo",
-    required: false,
-    enum: ["propias", "recibidas"],
-    description: "Tipo de reservas: propias (conductor) o recibidas (propietario de plaza)",
-  })
-  @ApiQuery({
-    name: "estado",
-    required: false,
-    enum: EstadoReserva,
-    description: "Filtrar por estado de la reserva",
-  })
   @ApiResponse({ status: 200, description: "Lista paginada de reservas autorizadas" })
   @ApiResponse({ status: 401, description: "No autorizado - Token ausente o inválido" })
   async obtenerTodas(
     @UsuarioActual() usuario: JwtPayload,
-    @Query() paginacion: PaginacionDto,
-    @Query("tipo") tipo?: "propias" | "recibidas",
-    @Query("estado") estado?: EstadoReserva,
+    @Query() filtros: FiltrarReservasDto,
   ) {
     return this.reservasService.obtenerUsuarioReservas(
       usuario.sub,
-      tipo || "propias",
-      paginacion,
-      estado,
+      filtros.tipo || "propias",
+      filtros,
+      filtros.estado,
     );
   }
 

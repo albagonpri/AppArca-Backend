@@ -60,6 +60,7 @@ model Usuario {
   plazas             Plaza[]
   reservas           Reserva[]
   vehiculos          Vehiculo[]
+  favoritos          Favorito[]
 
   @@map("usuarios")
 }
@@ -124,6 +125,10 @@ model Plaza {
   titulo             String
   descripcion        String?
   direccion          String
+  poblacion          String?
+  numeroPlaza        String?
+  planta             String?
+  indicacionesAcceso String?
   latitud            Float
   longitud           Float
   precioHora         Float
@@ -132,14 +137,44 @@ model Plaza {
   entradaDificil     Boolean             @default(false)
   descripcionEntrada String?
   dificultadesEntrada DificultadEntrada[] @default([])
-  tieneCamaras       Boolean             @default(false)
-  disponible         Boolean   @default(true)
+  tieneCamaras           Boolean   @default(false)
+  estaCubierta           Boolean   @default(false)
+  tieneCargadorElectrico Boolean   @default(false)
+  disponible             Boolean   @default(true)
   fechaCreacion      DateTime  @default(now())
   fechaActualizacion DateTime  @updatedAt
 
   reservas           Reserva[]
+  fotos              FotoPlaza[]
+  favoritos          Favorito[]
 
   @@map("plazas")
+}
+
+model FotoPlaza {
+  id            Int      @id @default(autoincrement())
+  plazaId       Int
+  plaza         Plaza    @relation(fields: [plazaId], references: [id], onDelete: Cascade)
+  url           String
+  orden         Int      @default(0)
+  fechaCreacion DateTime @default(now())
+
+  @@index([plazaId])
+  @@map("fotos_plazas")
+}
+
+model Favorito {
+  id            Int      @id @default(autoincrement())
+  usuarioId     Int
+  usuario       Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  plazaId       Int
+  plaza         Plaza    @relation(fields: [plazaId], references: [id], onDelete: Cascade)
+  fechaCreacion DateTime @default(now())
+
+  @@unique([usuarioId, plazaId])
+  @@index([usuarioId])
+  @@index([plazaId])
+  @@map("favoritos")
 }
 
 model Reserva {

@@ -22,6 +22,8 @@ describe('PlazasService - Dificultades de entrada', () => {
     precioHora: 2.5,
     largo: 5.0,
     ancho: 2.5,
+    estaCubierta: true,
+    tieneCargadorElectrico: false,
   };
 
   beforeEach(() => {
@@ -293,4 +295,417 @@ describe('PlazasService - Dificultades de entrada', () => {
       expect(resultado.meta.hasPreviousPage).toBe(false);
     });
   });
+  // ──────────────────────────────────────────────────────────
+  // Tests del flujo de coordenadas confirmadas por el usuario
+  // ──────────────────────────────────────────────────────────
+  describe('coordenadas confirmadas por el usuario (latitud/longitud en DTO)', () => {
+    it('debe usar coordenadas del DTO si se proporcionan y NO llamar a geocodificar', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        latitud: 43.361914,
+        longitud: -5.849396,
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockGeocoding.geocodificar).not.toHaveBeenCalled();
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            latitud: 43.361914,
+            longitud: -5.849396,
+          }),
+        }),
+      );
+    });
+
+    it('debe llamar a geocodificar si NO se envian coordenadas en el DTO', async () => {
+      const dto: CrearPlazaDto = { ...baseCrearDto };
+
+      await service.crear(1, dto);
+
+      expect(mockGeocoding.geocodificar).toHaveBeenCalledOnce();
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            latitud: 40.4168,
+            longitud: -3.7038,
+          }),
+        }),
+      );
+    });
+
+    it('debe lanzar BadRequestException si se envía latitud sin longitud', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        latitud: 40.4168,
+      };
+
+      await expect(service.crear(1, dto)).rejects.toThrow(BadRequestException);
+      await expect(service.crear(1, dto)).rejects.toThrow(
+        'Latitud y longitud deben proporcionarse conjuntamente.',
+      );
+    });
+
+    it('debe lanzar BadRequestException si se envía longitud sin latitud', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        longitud: -3.7038,
+      };
+
+      await expect(service.crear(1, dto)).rejects.toThrow(BadRequestException);
+    });
+
+    it('debe lanzar BadRequestException si las coordenadas están fuera de España', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        latitud: 48.8566,
+        longitud: 2.3522,
+      };
+
+      await expect(service.crear(1, dto)).rejects.toThrow(BadRequestException);
+      await expect(service.crear(1, dto)).rejects.toThrow(
+        'fuera del territorio español',
+      );
+    });
+
+    it('debe aceptar coordenadas de Canarias (límite sur de España)', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        latitud: 27.9202,
+        longitud: -15.5528,
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockGeocoding.geocodificar).not.toHaveBeenCalled();
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            latitud: 27.9202,
+            longitud: -15.5528,
+          }),
+        }),
+      );
+    });
+
+    it('al actualizar solo las coordenadas (mover marcador), debe guardarlas en BD y mantener la direccion', async () => {
+      const mockPlazaExistente = {
+        id: 5,
+        propietarioId: 1,
+        direccion: 'Calle Mayor 10, 28013 Madrid',
+        latitud: 40.4168,
+        longitud: -3.7038,
+        entradaDificil: false,
+        dificultadesEntrada: [],
+        descripcionEntrada: null,
+      };
+      mockPrisma.plaza.findUnique = vi.fn().mockResolvedValue(mockPlazaExistente);
+      mockPrisma.plaza.update = vi.fn().mockResolvedValue({
+        ...mockPlazaExistente,
+        latitud: 40.4200,
+        longitud: -3.7100,
+      });
+
+      await service.actualizar(1, 5, {
+        latitud: 40.4200,
+        longitud: -3.7100,
+      });
+
+      expect(mockPrisma.plaza.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 5 },
+          data: expect.objectContaining({
+            latitud: 40.4200,
+            longitud: -3.7100,
+          }),
+        }),
+      );
+      // La dirección no debe haber sido modificada
+      const callData = mockPrisma.plaza.update.mock.calls[0][0].data;
+      expect(callData.direccion).toBeUndefined();
+    });
+
+    it('al actualizar solo el precio, las coordenadas y la direccion deben conservarse intactas', async () => {
+      const mockPlazaExistente = {
+        id: 5,
+        propietarioId: 1,
+        direccion: 'Calle Mayor 10, 28013 Madrid',
+        latitud: 40.4168,
+        longitud: -3.7038,
+        precioHora: 2.0,
+        entradaDificil: false,
+        dificultadesEntrada: [],
+        descripcionEntrada: null,
+      };
+      mockPrisma.plaza.findUnique = vi.fn().mockResolvedValue(mockPlazaExistente);
+      mockPrisma.plaza.update = vi.fn().mockResolvedValue({
+        ...mockPlazaExistente,
+        precioHora: 3.5,
+      });
+
+      await service.actualizar(1, 5, {
+        precioHora: 3.5,
+      });
+
+      expect(mockPrisma.plaza.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 5 },
+          data: expect.objectContaining({
+            precioHora: 3.5,
+          }),
+        }),
+      );
+      const callData = mockPrisma.plaza.update.mock.calls[0][0].data;
+      expect(callData.latitud).toBeUndefined();
+      expect(callData.longitud).toBeUndefined();
+      expect(callData.direccion).toBeUndefined();
+    });
+
+    it('al crear una plaza con poblacion distinta a ciudad, guarda poblacion y formatea la direccion como poblacion (ciudad)', async () => {
+      const dtoConPoblacion: CrearPlazaDto = {
+        ...baseCrearDto,
+        codigoPostal: '33550',
+        ciudad: 'Cangas de Onís',
+        poblacion: 'Biamón',
+        provincia: 'Asturias',
+        latitud: 43.3500,
+        longitud: -5.1200,
+      };
+
+      await service.crear(1, dtoConPoblacion);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            poblacion: 'Biamón',
+            direccion: 'Calle Mayor 10, 33550 Biamón (Cangas de Onís), Asturias',
+            latitud: 43.3500,
+            longitud: -5.1200,
+          }),
+        }),
+      );
+    });
+
+    it('al crear una plaza con poblacion igual a ciudad, no duplica el nombre en la direccion legible', async () => {
+      const dtoMismaPoblacion: CrearPlazaDto = {
+        ...baseCrearDto,
+        codigoPostal: '28013',
+        ciudad: 'Madrid',
+        poblacion: 'Madrid',
+        provincia: 'Madrid',
+        latitud: 40.4168,
+        longitud: -3.7038,
+      };
+
+      await service.crear(1, dtoMismaPoblacion);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            poblacion: 'Madrid',
+            direccion: 'Calle Mayor 10, 28013 Madrid, Madrid',
+          }),
+        }),
+      );
+    });
+
+    it('al actualizar la direccion incluyendo poblacion, actualiza direccion y el campo poblacion en la BD', async () => {
+      const mockPlazaExistente = {
+        id: 7,
+        propietarioId: 1,
+        direccion: 'Calle Vieja 1, 28013 Madrid, Madrid',
+        poblacion: 'Madrid',
+        latitud: 40.4168,
+        longitud: -3.7038,
+        entradaDificil: false,
+        dificultadesEntrada: [],
+        descripcionEntrada: null,
+      };
+      mockPrisma.plaza.findUnique = vi.fn().mockResolvedValue(mockPlazaExistente);
+      mockPrisma.plaza.update = vi.fn().mockResolvedValue({
+        ...mockPlazaExistente,
+        direccion: 'Calle Mayor 10, 33550 Biamón (Cangas de Onís), Asturias',
+        poblacion: 'Biamón',
+      });
+
+      await service.actualizar(1, 7, {
+        calle: 'Calle Mayor',
+        numero: '10',
+        codigoPostal: '33550',
+        ciudad: 'Cangas de Onís',
+        poblacion: 'Biamón',
+        provincia: 'Asturias',
+        latitud: 43.3500,
+        longitud: -5.1200,
+      });
+
+      expect(mockPrisma.plaza.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 7 },
+          data: expect.objectContaining({
+            poblacion: 'Biamón',
+            direccion: 'Calle Mayor 10, 33550 Biamón (Cangas de Onís), Asturias',
+            latitud: 43.3500,
+            longitud: -5.1200,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('estaCubierta y tieneCargadorElectrico', () => {
+    it('debe guardar estaCubierta y tieneCargadorElectrico al crear una plaza', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        estaCubierta: true,
+        tieneCargadorElectrico: true,
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            estaCubierta: true,
+            tieneCargadorElectrico: true,
+          }),
+        }),
+      );
+    });
+
+    it('debe actualizar estaCubierta y tieneCargadorElectrico al modificar una plaza', async () => {
+      const mockPlaza = {
+        id: 1,
+        propietarioId: 1,
+        estaCubierta: false,
+        tieneCargadorElectrico: false,
+      };
+      mockPrisma.plaza.findUnique = vi.fn().mockResolvedValue(mockPlaza);
+
+      const dto: ActualizarPlazaDto = {
+        estaCubierta: true,
+        tieneCargadorElectrico: false,
+      };
+
+      await service.actualizar(1, 1, dto);
+
+      expect(mockPrisma.plaza.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({
+            estaCubierta: true,
+            tieneCargadorElectrico: false,
+          }),
+        }),
+      );
+    });
+    it('debe guardar numeroPlaza, planta e indicacionesAcceso si se proporcionan', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        numeroPlaza: '42-B',
+        planta: '-2',
+        indicacionesAcceso: 'Entrada por calle norte, rampa izquierda.',
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            numeroPlaza: '42-B',
+            planta: '-2',
+            indicacionesAcceso: 'Entrada por calle norte, rampa izquierda.',
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('actualizar plaza con datos de acceso', () => {
+    it('debe actualizar numeroPlaza, planta e indicacionesAcceso', async () => {
+      const plazaExistente = {
+        id: 1,
+        propietarioId: 1,
+        titulo: 'Plaza',
+        direccion: 'Calle Mayor 10, 28013 Madrid',
+        latitud: 40.4168,
+        longitud: -3.7038,
+        entradaDificil: false,
+        dificultadesEntrada: [],
+        descripcionEntrada: null,
+        numeroPlaza: '12',
+        planta: '-1',
+        indicacionesAcceso: 'Antigua indicación',
+      };
+
+      mockPrisma.plaza.findUnique.mockResolvedValue(plazaExistente);
+
+      const dto: ActualizarPlazaDto = {
+        numeroPlaza: '15',
+        planta: 'Baja',
+        indicacionesAcceso: 'Nueva indicación de acceso detallada.',
+      };
+
+      await service.actualizar(1, 1, dto);
+
+      expect(mockPrisma.plaza.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 1 },
+          data: expect.objectContaining({
+            numeroPlaza: '15',
+            planta: 'Baja',
+            indicacionesAcceso: 'Nueva indicación de acceso detallada.',
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('filtrado dinámico de plazas (patrón organization.service)', () => {
+    it('debe construir la consulta con filtros booleanos, numéricos y de texto', async () => {
+      mockPrisma.plaza.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.plaza.count = vi.fn().mockResolvedValue(0);
+
+      const filtros = {
+        page: 1,
+        limit: 10,
+        skip: 0,
+        q: 'Madrid',
+        provincia: 'Madrid',
+        estaCubierta: true,
+        tieneCargadorElectrico: true,
+        precioMax: 3.5,
+        largoMin: 4.8,
+      };
+
+      await service.obtenerTodas(filtros as any);
+
+      expect(mockPrisma.plaza.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            disponible: true,
+            estaCubierta: true,
+            tieneCargadorElectrico: true,
+            largo: { gte: 4.8 },
+            precioHora: { lte: 3.5 },
+            AND: expect.arrayContaining([
+              {
+                OR: [
+                  { direccion: { contains: 'Madrid', mode: 'insensitive' } },
+                  { poblacion: { contains: 'Madrid', mode: 'insensitive' } },
+                ],
+              },
+              {
+                direccion: { contains: 'Madrid', mode: 'insensitive' },
+              },
+            ]),
+          }),
+        }),
+      );
+    });
+  });
 });
+
+
+

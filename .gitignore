@@ -23,3 +23,6 @@ Thumbs.db
 
 # Testing and Coverage
 /coverage
+
+# Uploads
+/uploads
