@@ -241,9 +241,13 @@ export class PlazasService {
       }
     }
 
+    if (dto.tipoDisponibilidad === 'PUNTUAL' && !dto.horario)
+      throw new BadRequestException('Añade las fechas de disponibilidad puntual.');
+
     return this.prisma.plaza.create({
       data: {
-        ...(dto.horario !== undefined && { horario: comprobarConfiguracion(dto.horario) }),
+        tipoDisponibilidad: dto.tipoDisponibilidad,
+        ...(dto.horario !== undefined && { horario: comprobarConfiguracion(dto.horario, dto.tipoDisponibilidad) }),
         propietarioId,
         titulo: dto.titulo,
         descripcion: dto.descripcion,
@@ -628,6 +632,7 @@ export class PlazasService {
     const guardar = (db: Prisma.TransactionClient) => db.plaza.update({
       where: { id },
       data: {
+        tipoDisponibilidad: dto.tipoDisponibilidad,
         ...(dto.horario !== undefined && { horario: dto.horario }),
         ...(dto.titulo !== undefined && { titulo: dto.titulo }),
         ...(dto.descripcion !== undefined && { descripcion: dto.descripcion }),
@@ -677,13 +682,21 @@ export class PlazasService {
         },
       },
     });
+    if (dto.tipoDisponibilidad !== undefined && dto.horario === undefined)
+      throw new BadRequestException('Envía el horario al cambiar la modalidad.');
     if (dto.horario === undefined && dto.disponible !== false) return guardar(this.prisma);
     if (dto.horario !== undefined) {
       if (!plazaPrevia) throw new ForbiddenException('Solo el propietario puede cambiar el horario.');
-      comprobarConfiguracion(dto.horario);
+
     }
     try {
       return await this.prisma.$transaction(async tx => {
+        if (dto.horario !== undefined) {
+          const tipo = dto.tipoDisponibilidad ?? (await tx.plaza.findUniqueOrThrow({
+            where: { id }, select: { tipoDisponibilidad: true },
+          })).tipoDisponibilidad;
+          comprobarConfiguracion(dto.horario, tipo);
+        }
         const activas = await tx.reserva.findMany({
           where: { plazaId: id, estado: { in: ['PENDIENTE', 'CONFIRMADA'] }, fechaFin: { gt: new Date() } },
           select: { fechaInicio: true, fechaFin: true },

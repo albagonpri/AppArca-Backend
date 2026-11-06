@@ -5,9 +5,10 @@ export type Excepcion = {
   modo: 'ofrecer' | 'bloquear';
   franjas: Franja[];
 };
+export type TipoDisponibilidad = "HABITUAL" | "PUNTUAL";
 export type Horario = { semana: Franja[][]; excepciones: Excepcion[] };
 
-export function validarHorario(h: Horario): string | null {
+export function validarHorario(h: Horario, tipo: TipoDisponibilidad = "HABITUAL"): string | null {
   if (
     !h ||
     !Array.isArray(h.semana) ||
@@ -15,6 +16,9 @@ export function validarHorario(h: Horario): string | null {
     !Array.isArray(h.excepciones)
   )
     return 'Configura los siete días de la semana.';
+  if (tipo !== "HABITUAL" && tipo !== "PUNTUAL") return "Selecciona el tipo de disponibilidad.";
+  if (tipo === "PUNTUAL" && (!h.excepciones.length || h.semana.some(dia => !Array.isArray(dia) || dia.length)))
+    return "La disponibilidad puntual requiere fechas concretas y ningún horario semanal.";
   const fechas = new Set<string>();
   for (const e of h.excepciones) {
     if (
@@ -23,8 +27,10 @@ export function validarHorario(h: Horario): string | null {
       !Number.isFinite(Date.parse(e.fecha)) ||
       new Date(e.fecha).toISOString().slice(0, 10) !== e.fecha
     )
-      return 'Selecciona una fecha válida para cada excepción.';
-    if (fechas.has(e.fecha)) return 'Ya existe una excepción para esa fecha.';
+      return 'Selecciona una fecha válida para cada día.';
+    if (fechas.has(e.fecha)) return 'Esa fecha ya está configurada.';
+    if (tipo === "PUNTUAL" && (e.modo !== "ofrecer" || !Array.isArray(e.franjas) || !e.franjas.length))
+      return "Añade al menos una franja disponible para cada fecha.";
     fechas.add(e.fecha);
     if (!['ofrecer', 'bloquear'].includes(e.modo))
       return 'Selecciona el tipo de excepción.';

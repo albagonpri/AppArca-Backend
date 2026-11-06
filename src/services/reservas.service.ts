@@ -51,7 +51,7 @@ export class ReservasService {
     throw new Error("La operación no pudo completarse tras varios intentos. Inténtalo de nuevo.");
   }
 
-  private async comprobarPeriodo(tx: Prisma.TransactionClient, plaza: {id:number; disponible:boolean; horario?:unknown}, fechaInicio:string, fechaFin:string) {
+  private async comprobarPeriodo(tx: Prisma.TransactionClient, plaza: {id:number; disponible:boolean; horario?:unknown}, fechaInicio:string, fechaFin:string, excluirId?: number) {
       if (!plaza.disponible) {
         throw new BadRequestException("La plaza no se encuentra disponible para reservas");
       }
@@ -73,6 +73,7 @@ export class ReservasService {
       const reservaSolapada = await tx.reserva.findFirst({
         where: {
           plazaId: plaza.id,
+          ...(excluirId !== undefined && { id: { not: excluirId } }),
           estado: { in: [EstadoReserva.PENDIENTE, EstadoReserva.CONFIRMADA] },
           fechaInicio: { lt: fin },
           fechaFin: { gt: inicio },
@@ -300,23 +301,8 @@ export class ReservasService {
         }
       }
 
-      // Prevenir solapamiento concurrente de reservas CONFIRMADAS
       if (nuevoEstado === EstadoReserva.CONFIRMADA) {
-        const reservaConfirmadaSolapada = await tx.reserva.findFirst({
-          where: {
-            plazaId: reserva.plazaId,
-            id: { not: reserva.id },
-            estado: EstadoReserva.CONFIRMADA,
-            fechaInicio: { lt: reserva.fechaFin },
-            fechaFin: { gt: reserva.fechaInicio },
-          },
-        });
-
-        if (reservaConfirmadaSolapada) {
-          throw new ConflictException(
-            "No se puede confirmar la reserva: la plaza ya cuenta con otra reserva confirmada en las fechas seleccionadas",
-          );
-        }
+        await this.comprobarPeriodo(tx, reserva.plaza, reserva.fechaInicio.toISOString(), reserva.fechaFin.toISOString(), id);
       }
 
       return tx.reserva.update({
@@ -339,15 +325,8 @@ export class ReservasService {
       if (!Object.values(EstadoReserva).includes(estado)) throw new BadRequestException('Estado de reserva inválido');
       const pasaAActiva = estado === EstadoReserva.PENDIENTE || estado === EstadoReserva.CONFIRMADA;
       const estabaActiva = reserva.estado === EstadoReserva.PENDIENTE || reserva.estado === EstadoReserva.CONFIRMADA;
-      if (pasaAActiva && !estabaActiva) {
-        await this.comprobarPeriodo(tx,reserva.plaza,reserva.fechaInicio.toISOString(),reserva.fechaFin.toISOString());
-      }
-      if (estado === EstadoReserva.CONFIRMADA && estabaActiva) {
-        const ocupada = await tx.reserva.findFirst({where:{
-          plazaId:reserva.plazaId, id:{not:id}, estado:{in:['PENDIENTE','CONFIRMADA']},
-          fechaInicio:{lt:reserva.fechaFin},fechaFin:{gt:reserva.fechaInicio},
-        }});
-        if (ocupada) throw new ConflictException('Este horario ya está reservado');
+      if (pasaAActiva && (!estabaActiva || estado === EstadoReserva.CONFIRMADA)) {
+        await this.comprobarPeriodo(tx, reserva.plaza, reserva.fechaInicio.toISOString(), reserva.fechaFin.toISOString(), id);
       }
       return tx.reserva.update({where:{id},data:{estado},include:{usuario:{select:usuarioSelectPublico},plaza:true}});
     });

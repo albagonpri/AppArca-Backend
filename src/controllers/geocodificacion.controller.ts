@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common";
+import { Controller, Get, Param, ParseFloatPipe, Query, UseGuards } from "@nestjs/common";
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -16,6 +16,12 @@ import { BuscarDireccionDto } from "../dto/geocodificacion/buscar-direccion.dto.
 @Controller("geocodificacion")
 export class GeocodificacionController {
   constructor(private readonly geocodingService: GeocodingService) {}
+
+  @Get("inversa")
+  @ApiOperation({ summary: "Obtener la dirección del punto confirmado en el mapa" })
+  inversa(@Query("latitud", ParseFloatPipe) latitud: number, @Query("longitud", ParseFloatPipe) longitud: number) {
+    return this.geocodingService.direccionDelPunto(latitud, longitud);
+  }
 
   @Get("buscar")
   @ApiOperation({

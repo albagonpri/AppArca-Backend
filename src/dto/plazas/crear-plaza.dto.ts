@@ -1,6 +1,6 @@
 import type { Horario } from '../../models/horario.js';
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { DificultadEntrada } from "@prisma/client";
+import { DificultadEntrada, TipoDisponibilidad } from "@prisma/client";
 import {
   IsArray,
   IsObject,
@@ -18,6 +18,11 @@ import {
 } from "class-validator";
 
 export class CrearPlazaDto {
+  @ApiPropertyOptional({ enum: TipoDisponibilidad })
+  @IsOptional()
+  @IsEnum(TipoDisponibilidad)
+  tipoDisponibilidad?: TipoDisponibilidad;
+
   @IsOptional()
   @IsObject()
   horario?: Horario;

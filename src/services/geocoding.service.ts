@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 
 export interface DatosDireccion {
   calle: string;
@@ -43,6 +43,7 @@ export interface IGeocodingProvider {
 }
 
 interface CartoCiudadCandidate {
+  noNumber?: boolean;
   id?: string;
   province?: string;
   muni?: string;
@@ -73,6 +74,37 @@ export class GeocodingService implements IGeocodingProvider {
     if (isNaN(lat) || isNaN(lng)) return false;
     // Límites de España incluyendo Península, Baleares y Canarias
     return lat >= 27.0 && lat <= 44.5 && lng >= -18.5 && lng <= 5.0;
+  }
+
+  async direccionDelPunto(latitud: number, longitud: number) {
+    if (!this.esCoordenadaEspana(latitud, longitud)) {
+      throw new BadRequestException("Selecciona un punto dentro de España.");
+    }
+    const params = new URLSearchParams({ lat: String(latitud), lon: String(longitud) });
+    let punto: CartoCiudadCandidate;
+    try {
+      const respuesta = await fetch(`${this.CARTOCIUDAD_BASE}/reverseGeocode?${params}`, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(this.TIMEOUT_MS),
+      });
+      if (!respuesta.ok) throw new Error();
+      punto = await respuesta.json();
+    } catch {
+      throw new ServiceUnavailableException("No se pudo consultar la dirección en CartoCiudad.");
+    }
+    if (!punto || !(punto.address || punto.muni || punto.postalCode)) {
+      throw new NotFoundException("No se encontró una dirección para este punto.");
+    }
+    const portal = punto.type?.toLowerCase() === "portal";
+    return {
+      calle: (portal || punto.tip_via) && punto.address ? [punto.tip_via, punto.address].filter(Boolean).join(" ") : "",
+      numero: portal && punto.noNumber ? "s/n" : portal && punto.portalNumber != null
+        ? [punto.portalNumber, punto.extension].filter(v => v != null && v !== "").join(" ") : "",
+      codigoPostal: punto.postalCode || "",
+      municipio: punto.muni || "",
+      poblacion: punto.poblacion || "",
+      provincia: punto.province || "",
+    };
   }
 
   private normalizarNumero(numero: string): string {
