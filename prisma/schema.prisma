@@ -86,6 +86,8 @@ model Vehiculo {
   fechaCreacion      DateTime           @default(now())
   fechaActualizacion DateTime           @updatedAt
 
+  reservas           Reserva[]
+
   @@map("vehiculos")
 }
 
@@ -143,6 +145,7 @@ model Plaza {
   estaCubierta           Boolean   @default(false)
   tieneCargadorElectrico Boolean   @default(false)
   disponible             Boolean   @default(true)
+  alturaMaxima           Float?
   fechaCreacion      DateTime  @default(now())
   fechaActualizacion DateTime  @updatedAt
 
@@ -185,9 +188,12 @@ model Reserva {
   usuario            Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   plazaId            Int
   plaza              Plaza         @relation(fields: [plazaId], references: [id], onDelete: Cascade)
+  vehiculoId         Int?
+  vehiculo           Vehiculo?     @relation(fields: [vehiculoId], references: [id], onDelete: SetNull)
   fechaInicio        DateTime
   fechaFin           DateTime
   estado             EstadoReserva @default(PENDIENTE)
+  precioTotal        Decimal?      @db.Decimal(10, 2)
   fechaCreacion      DateTime      @default(now())
   fechaActualizacion DateTime      @updatedAt
 

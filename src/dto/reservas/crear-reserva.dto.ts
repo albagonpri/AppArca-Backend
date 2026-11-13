@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsInt, IsNotEmpty, IsPositive } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsDateString, IsInt, IsNotEmpty, IsOptional, IsPositive } from 'class-validator';
 
 export class CrearReservaDto {
   @ApiProperty({
@@ -17,6 +17,15 @@ export class CrearReservaDto {
   @IsInt({ message: 'El ID de la plaza debe ser un número entero' })
   @IsPositive({ message: 'El ID de la plaza debe ser un número positivo' })
   plazaId: number;
+
+  @ApiPropertyOptional({
+    example: 3,
+    description: 'ID del vehículo del usuario con el que se realiza la reserva',
+  })
+  @IsOptional()
+  @IsInt({ message: 'El ID del vehículo debe ser un número entero' })
+  @IsPositive({ message: 'El ID del vehículo debe ser un número positivo' })
+  vehiculoId?: number;
 
   @ApiProperty({
     example: '2026-09-20T18:00:00.000Z',

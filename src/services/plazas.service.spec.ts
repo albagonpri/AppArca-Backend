@@ -145,6 +145,39 @@ describe('PlazasService - Dificultades de entrada', () => {
         }),
       );
     });
+
+    it('debe persistir alturaMaxima si se proporciona como valor numérico positivo', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        alturaMaxima: 2.15,
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            alturaMaxima: 2.15,
+          }),
+        }),
+      );
+    });
+
+    it('debe persistir alturaMaxima como null si no se especifica', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            alturaMaxima: null,
+          }),
+        }),
+      );
+    });
   });
 
   describe('actualizar plaza', () => {

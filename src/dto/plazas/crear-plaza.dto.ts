@@ -235,4 +235,13 @@ export class CrearPlazaDto {
   @IsBoolean({ message: "tieneCargadorElectrico debe ser un valor booleano" })
   @IsNotEmpty({ message: "El campo tieneCargadorElectrico es obligatorio" })
   tieneCargadorElectrico: boolean;
+
+  @ApiPropertyOptional({
+    example: 2.1,
+    description: "Altura máxima de acceso en metros (opcional)",
+  })
+  @IsNumber({}, { message: "La altura máxima debe ser un valor numérico" })
+  @IsPositive({ message: "La altura máxima debe ser un número positivo" })
+  @IsOptional()
+  alturaMaxima?: number;
 }

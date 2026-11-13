@@ -116,21 +116,40 @@ export class ReservasService {
         throw new BadRequestException("No puedes reservar tu propia plaza de aparcamiento");
       }
 
+      // Validar vehículo si se proporciona
+      if (dto.vehiculoId !== undefined) {
+        const vehiculo = await tx.vehiculo.findUnique({ where: { id: dto.vehiculoId } });
+        if (!vehiculo) {
+          throw new NotFoundException(`El vehículo con ID ${dto.vehiculoId} no existe`);
+        }
+        if (vehiculo.usuarioId !== dto.usuarioId) {
+          throw new BadRequestException("El vehículo no pertenece al usuario que realiza la reserva");
+        }
+      }
+
       const { inicio, fin } = await this.comprobarPeriodo(tx, plaza, dto.fechaInicio, dto.fechaFin);
+
+      // Calcular precio total con precisión decimal
+      const duracionMs = fin.getTime() - inicio.getTime();
+      const duracionHoras = duracionMs / (1000 * 60 * 60);
+      const precioTotal = Math.round(plaza.precioHora * duracionHoras * 100) / 100;
 
       return tx.reserva.create({
         data: {
           usuarioId: dto.usuarioId,
           plazaId: dto.plazaId,
+          vehiculoId: dto.vehiculoId ?? null,
           fechaInicio: inicio,
           fechaFin: fin,
           estado: EstadoReserva.PENDIENTE,
+          precioTotal,
         },
         include: {
           usuario: {
             select: usuarioSelectPublico,
           },
           plaza: true,
+          vehiculo: true,
         },
       });
     });
@@ -170,6 +189,7 @@ export class ReservasService {
             select: usuarioSelectPublico,
           },
           plaza: true,
+          vehiculo: true,
         },
         orderBy: [{ fechaCreacion: "desc" }, { id: "desc" }],
       }),
@@ -204,6 +224,7 @@ export class ReservasService {
             select: usuarioSelectPublico,
           },
           plaza: true,
+          vehiculo: true,
         },
         orderBy: [{ fechaCreacion: "desc" }, { id: "desc" }],
       }),
@@ -224,6 +245,7 @@ export class ReservasService {
           select: usuarioSelectPublico,
         },
         plaza: true,
+        vehiculo: true,
       },
     });
 
@@ -313,6 +335,7 @@ export class ReservasService {
             select: usuarioSelectPublico,
           },
           plaza: true,
+          vehiculo: true,
         },
       });
     });
@@ -328,7 +351,7 @@ export class ReservasService {
       if (pasaAActiva && (!estabaActiva || estado === EstadoReserva.CONFIRMADA)) {
         await this.comprobarPeriodo(tx, reserva.plaza, reserva.fechaInicio.toISOString(), reserva.fechaFin.toISOString(), id);
       }
-      return tx.reserva.update({where:{id},data:{estado},include:{usuario:{select:usuarioSelectPublico},plaza:true}});
+      return tx.reserva.update({where:{id},data:{estado},include:{usuario:{select:usuarioSelectPublico},plaza:true,vehiculo:true}});
     });
   }
 

@@ -267,6 +267,7 @@ export class PlazasService {
         tieneCamaras: dto.tieneCamaras ?? false,
         estaCubierta: dto.estaCubierta ?? false,
         tieneCargadorElectrico: dto.tieneCargadorElectrico ?? false,
+        alturaMaxima: dto.alturaMaxima ?? null,
       },
       include: {
         propietario: {
@@ -657,6 +658,9 @@ export class PlazasService {
         }),
         ...(dto.tieneCargadorElectrico !== undefined && {
           tieneCargadorElectrico: dto.tieneCargadorElectrico,
+        }),
+        ...(dto.alturaMaxima !== undefined && {
+          alturaMaxima: dto.alturaMaxima,
         }),
         entradaDificil: finalEntradaDificil,
         dificultadesEntrada: finalDificultades,
