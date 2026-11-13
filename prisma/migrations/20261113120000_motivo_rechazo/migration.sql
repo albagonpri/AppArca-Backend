@@ -1,0 +1,1 @@
+ALTER TABLE "reservas" ADD COLUMN IF NOT EXISTS "motivoRechazo" VARCHAR(500);

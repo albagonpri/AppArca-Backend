@@ -145,6 +145,39 @@ describe('PlazasService - Dificultades de entrada', () => {
         }),
       );
     });
+
+    it('debe persistir alturaMaxima si se proporciona como valor numérico positivo', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+        alturaMaxima: 2.15,
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            alturaMaxima: 2.15,
+          }),
+        }),
+      );
+    });
+
+    it('debe persistir alturaMaxima como null si no se especifica', async () => {
+      const dto: CrearPlazaDto = {
+        ...baseCrearDto,
+      };
+
+      await service.crear(1, dto);
+
+      expect(mockPrisma.plaza.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            alturaMaxima: null,
+          }),
+        }),
+      );
+    });
   });
 
   describe('actualizar plaza', () => {
@@ -700,6 +733,47 @@ describe('PlazasService - Dificultades de entrada', () => {
                 direccion: { contains: 'Madrid', mode: 'insensitive' },
               },
             ]),
+          }),
+        }),
+      );
+    });
+
+    it('debe excluir las plazas del usuario autenticado en obtenerTodas', async () => {
+      mockPrisma.plaza.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.plaza.count = vi.fn().mockResolvedValue(0);
+
+      const filtros = { page: 1, limit: 10, skip: 0 };
+      await service.obtenerTodas(filtros as any, 42); // Usuario 42 autenticado
+
+      expect(mockPrisma.plaza.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            disponible: true,
+            propietarioId: { not: 42 },
+          }),
+        }),
+      );
+      expect(mockPrisma.plaza.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            disponible: true,
+            propietarioId: { not: 42 },
+          }),
+        }),
+      );
+    });
+
+    it('debe excluir las plazas del usuario autenticado en obtenerMarcadoresMapa', async () => {
+      mockPrisma.plaza.findMany = vi.fn().mockResolvedValue([]);
+
+      const filtros = { page: 1, limit: 10, skip: 0 };
+      await service.obtenerMarcadoresMapa(filtros as any, 42);
+
+      expect(mockPrisma.plaza.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            disponible: true,
+            propietarioId: { not: 42 },
           }),
         }),
       );

@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Patch,
   Query,
   UseGuards,
 } from "@nestjs/common";
@@ -17,6 +18,7 @@ import {
   ApiTags,
 } from "@nestjs/swagger";
 import { UsuariosService } from "../services/usuarios.service.js";
+import { NombrePerfilDto } from "../dto/usuarios/nombre-perfil.dto.js";
 import { CrearUsuarioDto } from "../dto/usuarios/crear-usuario.dto.js";
 import { PaginacionDto } from "../dto/comun/paginacion.dto.js";
 import { JwtGuard, type JwtPayload } from "../guards/jwt.guard.js";
@@ -27,6 +29,13 @@ import { UsuarioActual } from "../decorators/usuario-actual.decorator.js";
 export class UsuariosController {
   constructor(private readonly usuariosService: UsuariosService) {}
 
+
+  @Patch("mi-perfil")
+  @UseGuards(JwtGuard)
+  @ApiBearerAuth()
+  actualizarPerfil(@UsuarioActual() usuario: JwtPayload, @Body() dto: NombrePerfilDto) {
+    return this.usuariosService.actualizar(usuario.sub, { nombre: dto.nombre });
+  }
 
   @Post()
   @ApiOperation({ summary: "Crear un nuevo usuario" })

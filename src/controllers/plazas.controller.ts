@@ -27,6 +27,7 @@ import { CrearPlazaDto } from "../dto/plazas/crear-plaza.dto.js";
 import { ActualizarPlazaDto } from "../dto/plazas/actualizar-plaza.dto.js";
 import { FiltrarPlazasDto } from "../dto/plazas/filtrar-plazas.dto.js";
 import { JwtGuard, type JwtPayload } from "../guards/jwt.guard.js";
+import { JwtOpcionalGuard } from "../guards/jwt-opcional.guard.js";
 import { UsuarioActual } from "../decorators/usuario-actual.decorator.js";
 import { PaginacionDto } from "../dto/comun/paginacion.dto.js";
 
@@ -48,11 +49,15 @@ export class PlazasController {
     return this.plazasService.crear(usuario.sub, dto);
   }
 
+  @UseGuards(JwtOpcionalGuard)
   @Get()
   @ApiOperation({ summary: "Obtener la lista paginada de todas las plazas públicas con filtros opcionales" })
   @ApiResponse({ status: 200, description: "Lista paginada de plazas obtenida exitosamente" })
-  async obtenerTodas(@Query() filtros: FiltrarPlazasDto) {
-    return this.plazasService.obtenerTodas(filtros);
+  async obtenerTodas(
+    @Query() filtros: FiltrarPlazasDto,
+    @UsuarioActual() usuario?: JwtPayload,
+  ) {
+    return this.plazasService.obtenerTodas(filtros, usuario?.sub);
   }
 
   @UseGuards(JwtGuard)
@@ -65,11 +70,15 @@ export class PlazasController {
     return this.plazasService.obtenerMisPlazas(usuario.sub, paginacion);
   }
 
+  @UseGuards(JwtOpcionalGuard)
   @Get("mapa")
   @ApiOperation({ summary: "Obtener los marcadores de plazas disponibles para el mapa interactivo con filtros opcionales" })
   @ApiResponse({ status: 200, description: "Lista de marcadores públicos de plazas para el mapa" })
-  async obtenerMarcadoresMapa(@Query() filtros: FiltrarPlazasDto) {
-    return this.plazasService.obtenerMarcadoresMapa(filtros);
+  async obtenerMarcadoresMapa(
+    @Query() filtros: FiltrarPlazasDto,
+    @UsuarioActual() usuario?: JwtPayload,
+  ) {
+    return this.plazasService.obtenerMarcadoresMapa(filtros, usuario?.sub);
   }
 
   @Get("fotos/:nombreArchivo")

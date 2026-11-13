@@ -267,6 +267,7 @@ export class PlazasService {
         tieneCamaras: dto.tieneCamaras ?? false,
         estaCubierta: dto.estaCubierta ?? false,
         tieneCargadorElectrico: dto.tieneCargadorElectrico ?? false,
+        alturaMaxima: dto.alturaMaxima ?? null,
       },
       include: {
         propietario: {
@@ -282,10 +283,18 @@ export class PlazasService {
   /**
    * Construye dinámicamente la cláusula where de Prisma según los filtros proporcionados.
    */
-  private construirWhereFiltros(filtros: FiltrarPlazasDto): Prisma.PlazaWhereInput {
+  private construirWhereFiltros(
+    filtros: FiltrarPlazasDto,
+    excluirPropietarioId?: number,
+  ): Prisma.PlazaWhereInput {
     const where: Prisma.PlazaWhereInput = {
       disponible: true,
     };
+
+    if (excluirPropietarioId) {
+      where.propietarioId = { not: excluirPropietarioId };
+    }
+
     const andConditions: Prisma.PlazaWhereInput[] = [];
 
     // Búsqueda libre por texto (municipio, provincia, código postal o dirección general)
@@ -370,11 +379,12 @@ export class PlazasService {
    */
   async obtenerTodas(
     filtros: FiltrarPlazasDto = new FiltrarPlazasDto(),
+    excluirPropietarioId?: number,
   ): Promise<RespuestaPaginada<any>> {
     const skip = filtros.skip;
     const take = filtros.limit;
 
-    const where = this.construirWhereFiltros(filtros);
+    const where = this.construirWhereFiltros(filtros, excluirPropietarioId);
 
     const [data, total] = await Promise.all([
       this.prisma.plaza.findMany({
@@ -404,8 +414,9 @@ export class PlazasService {
    */
   async obtenerMarcadoresMapa(
     filtros: FiltrarPlazasDto = new FiltrarPlazasDto(),
+    excluirPropietarioId?: number,
   ): Promise<any[]> {
-    const where = this.construirWhereFiltros(filtros);
+    const where = this.construirWhereFiltros(filtros, excluirPropietarioId);
 
     const plazas = await this.prisma.plaza.findMany({
       where,
@@ -658,6 +669,9 @@ export class PlazasService {
         ...(dto.tieneCargadorElectrico !== undefined && {
           tieneCargadorElectrico: dto.tieneCargadorElectrico,
         }),
+        ...(dto.alturaMaxima !== undefined && {
+          alturaMaxima: dto.alturaMaxima,
+        }),
         entradaDificil: finalEntradaDificil,
         dificultadesEntrada: finalDificultades,
         descripcionEntrada: finalDescripcion,
@@ -873,21 +887,24 @@ export class PlazasService {
       throw new NotFoundException("Fotografía no encontrada");
     }
 
+    // Retirar el anuncio antes de comprobar referencias para conservar las imágenes históricas.
+    await this.prisma.fotoPlaza.delete({ where: { id: fotoId } });
+    const historicas = await this.prisma.reserva.count({ where: {
+      plazaId, condicionesPlaza: { path: ['fotos'], array_contains: [{ id: fotoId }] }
+    } });
     const nombreArchivo = path.basename(foto.url);
     const directorioUploads = path.resolve(process.cwd(), "uploads", "plazas");
     const rutaCompleta = path.join(directorioUploads, nombreArchivo);
 
     try {
-      if (fs.existsSync(rutaCompleta)) {
+      if (!historicas && fs.existsSync(rutaCompleta)) {
         await fs.promises.unlink(rutaCompleta);
       }
     } catch {
       // Ignorar error al borrar archivo físico para no bloquear borrado en base de datos
     }
 
-    await this.prisma.fotoPlaza.delete({
-      where: { id: fotoId },
-    });
+
 
     return { mensaje: "Fotografía eliminada exitosamente" };
   }

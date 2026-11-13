@@ -71,6 +71,11 @@ export class ReservasController {
     );
   }
 
+  @Get("franjas/:plazaId")
+  franjas(@UsuarioActual() usuario: JwtPayload, @Param("plazaId", ParseIntPipe) id: number, @Query("fecha") fecha: string) {
+    return this.reservasService.franjasLibres(id, fecha, usuario.sub);
+  }
+
   @Get("disponibilidad/:plazaId")
   consultar(@Param("plazaId", ParseIntPipe) id:number, @Query("inicio") inicio:string, @Query("fin") fin:string) {
     return this.reservasService.consultar(id, inicio, fin);
@@ -112,6 +117,7 @@ export class ReservasController {
       usuario.sub,
       !!usuario.esAdmin,
       dto.estado,
+      dto.motivoRechazo,
     );
   }
 }
