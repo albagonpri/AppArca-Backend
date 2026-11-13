@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ReservasService } from './reservas.service.js';
 import type { PrismaService } from '../database/prisma.service.js';
 import { EstadoReserva } from '@prisma/client';
@@ -115,6 +115,34 @@ describe('ReservasService - Vehículos y Precio Total', () => {
       const resultado = await service.crear(dto);
       expect(resultado.precioTotal).toBe(3.21);
     });
+
+    it('debe rechazar la solicitud con ConflictException si el precio mostrado difiere del actual', async () => {
+      const dto = {
+        usuarioId: 1,
+        plazaId: 100,
+        vehiculoId: 10,
+        fechaInicio: '2090-06-15T10:00:00.000Z',
+        fechaFin: '2090-06-15T12:00:00.000Z', // 2 horas * 2.50 = 5.00 €
+        precioTotal: 4.00, // Precio antiguo desfasado
+      };
+
+      await expect(service.crear(dto)).rejects.toThrow(ConflictException);
+      await expect(service.crear(dto)).rejects.toThrow('El precio de la plaza ha cambiado');
+    });
+
+    it('debe aceptar la solicitud si el precio mostrado coincide con el calculado', async () => {
+      const dto = {
+        usuarioId: 1,
+        plazaId: 100,
+        vehiculoId: 10,
+        fechaInicio: '2090-06-15T10:00:00.000Z',
+        fechaFin: '2090-06-15T12:00:00.000Z',
+        precioTotal: 5.00,
+      };
+
+      const resultado = await service.crear(dto);
+      expect(resultado.precioTotal).toBe(5.00);
+    });
   });
 
   describe('Asociación y validación de vehículos', () => {
@@ -166,6 +194,92 @@ describe('ReservasService - Vehículos y Precio Total', () => {
 
       await expect(service.crear(dto)).rejects.toThrow(BadRequestException);
       await expect(service.crear(dto)).rejects.toThrow('No puedes reservar tu propia plaza');
+    });
+  });
+
+  describe('Respuesta del propietario a solicitudes recibidas', () => {
+    const mockReservaPendiente = {
+      id: 50,
+      usuarioId: 1, // Conductor
+      plazaId: 100,
+      vehiculoId: 10,
+      fechaInicio: new Date('2090-06-15T10:00:00.000Z'),
+      fechaFin: new Date('2090-06-15T11:30:00.000Z'),
+      estado: EstadoReserva.PENDIENTE,
+      precioTotal: 3.75,
+      plaza: mockPlaza, // propietarioId: 2
+    };
+
+    it('debe permitir al propietario aceptar una solicitud pendiente cambiando a CONFIRMADA', async () => {
+      mockPrisma.reserva.findUnique.mockResolvedValue(mockReservaPendiente);
+      mockPrisma.reserva.update.mockImplementation(({ data }) =>
+        Promise.resolve({ ...mockReservaPendiente, estado: data.estado }),
+      );
+
+      const res = await service.actualizarEstadoPorUsuario(50, 2, false, EstadoReserva.CONFIRMADA);
+      expect(res.estado).toBe(EstadoReserva.CONFIRMADA);
+      expect(mockPrisma.reserva.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 50 },
+          data: { estado: EstadoReserva.CONFIRMADA },
+        }),
+      );
+    });
+
+    it('debe permitir al propietario rechazar una solicitud pendiente cambiando a RECHAZADA', async () => {
+      mockPrisma.reserva.findUnique.mockResolvedValue(mockReservaPendiente);
+      mockPrisma.reserva.update.mockImplementation(({ data }) =>
+        Promise.resolve({ ...mockReservaPendiente, estado: data.estado }),
+      );
+
+      const res = await service.actualizarEstadoPorUsuario(50, 2, false, EstadoReserva.RECHAZADA);
+      expect(res.estado).toBe(EstadoReserva.RECHAZADA);
+      expect(mockPrisma.reserva.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 50 },
+          data: { estado: EstadoReserva.RECHAZADA },
+        }),
+      );
+    });
+
+    it('debe impedir que el conductor acepte o rechace su propia solicitud', async () => {
+      mockPrisma.reserva.findUnique.mockResolvedValue(mockReservaPendiente);
+
+      await expect(
+        service.actualizarEstadoPorUsuario(50, 1, false, EstadoReserva.CONFIRMADA),
+      ).rejects.toThrow(ForbiddenException);
+
+      await expect(
+        service.actualizarEstadoPorUsuario(50, 1, false, EstadoReserva.RECHAZADA),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('debe impedir responder a una solicitud que ya no está PENDIENTE', async () => {
+      mockPrisma.reserva.findUnique.mockResolvedValue({
+        ...mockReservaPendiente,
+        estado: EstadoReserva.CONFIRMADA,
+      });
+
+      await expect(
+        service.actualizarEstadoPorUsuario(50, 2, false, EstadoReserva.RECHAZADA),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.actualizarEstadoPorUsuario(50, 2, false, EstadoReserva.RECHAZADA),
+      ).rejects.toThrow('Solo se pueden responder solicitudes en estado PENDIENTE');
+    });
+
+    it('debe impedir modificar una reserva que ya fue RECHAZADA', async () => {
+      mockPrisma.reserva.findUnique.mockResolvedValue({
+        ...mockReservaPendiente,
+        estado: EstadoReserva.RECHAZADA,
+      });
+
+      await expect(
+        service.actualizarEstadoPorUsuario(50, 2, false, EstadoReserva.CONFIRMADA),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.actualizarEstadoPorUsuario(50, 2, false, EstadoReserva.CONFIRMADA),
+      ).rejects.toThrow('No se puede modificar una reserva que ya ha sido rechazada');
     });
   });
 });

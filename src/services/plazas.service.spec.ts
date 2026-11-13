@@ -737,6 +737,47 @@ describe('PlazasService - Dificultades de entrada', () => {
         }),
       );
     });
+
+    it('debe excluir las plazas del usuario autenticado en obtenerTodas', async () => {
+      mockPrisma.plaza.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.plaza.count = vi.fn().mockResolvedValue(0);
+
+      const filtros = { page: 1, limit: 10, skip: 0 };
+      await service.obtenerTodas(filtros as any, 42); // Usuario 42 autenticado
+
+      expect(mockPrisma.plaza.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            disponible: true,
+            propietarioId: { not: 42 },
+          }),
+        }),
+      );
+      expect(mockPrisma.plaza.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            disponible: true,
+            propietarioId: { not: 42 },
+          }),
+        }),
+      );
+    });
+
+    it('debe excluir las plazas del usuario autenticado en obtenerMarcadoresMapa', async () => {
+      mockPrisma.plaza.findMany = vi.fn().mockResolvedValue([]);
+
+      const filtros = { page: 1, limit: 10, skip: 0 };
+      await service.obtenerMarcadoresMapa(filtros as any, 42);
+
+      expect(mockPrisma.plaza.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            disponible: true,
+            propietarioId: { not: 42 },
+          }),
+        }),
+      );
+    });
   });
 });
 

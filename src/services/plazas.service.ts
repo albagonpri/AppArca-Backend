@@ -283,10 +283,18 @@ export class PlazasService {
   /**
    * Construye dinámicamente la cláusula where de Prisma según los filtros proporcionados.
    */
-  private construirWhereFiltros(filtros: FiltrarPlazasDto): Prisma.PlazaWhereInput {
+  private construirWhereFiltros(
+    filtros: FiltrarPlazasDto,
+    excluirPropietarioId?: number,
+  ): Prisma.PlazaWhereInput {
     const where: Prisma.PlazaWhereInput = {
       disponible: true,
     };
+
+    if (excluirPropietarioId) {
+      where.propietarioId = { not: excluirPropietarioId };
+    }
+
     const andConditions: Prisma.PlazaWhereInput[] = [];
 
     // Búsqueda libre por texto (municipio, provincia, código postal o dirección general)
@@ -371,11 +379,12 @@ export class PlazasService {
    */
   async obtenerTodas(
     filtros: FiltrarPlazasDto = new FiltrarPlazasDto(),
+    excluirPropietarioId?: number,
   ): Promise<RespuestaPaginada<any>> {
     const skip = filtros.skip;
     const take = filtros.limit;
 
-    const where = this.construirWhereFiltros(filtros);
+    const where = this.construirWhereFiltros(filtros, excluirPropietarioId);
 
     const [data, total] = await Promise.all([
       this.prisma.plaza.findMany({
@@ -405,8 +414,9 @@ export class PlazasService {
    */
   async obtenerMarcadoresMapa(
     filtros: FiltrarPlazasDto = new FiltrarPlazasDto(),
+    excluirPropietarioId?: number,
   ): Promise<any[]> {
-    const where = this.construirWhereFiltros(filtros);
+    const where = this.construirWhereFiltros(filtros, excluirPropietarioId);
 
     const plazas = await this.prisma.plaza.findMany({
       where,

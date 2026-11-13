@@ -18,6 +18,7 @@ import { ReservasService } from "./services/reservas.service.js";
 import { GeocodingService } from "./services/geocoding.service.js";
 import { FavoritosService } from "./services/favoritos.service.js";
 import { JwtGuard } from "./guards/jwt.guard.js";
+import { JwtOpcionalGuard } from "./guards/jwt-opcional.guard.js";
 import { AdminGuard } from "./guards/admin.guard.js";
 
 @Module({
@@ -55,6 +56,7 @@ import { AdminGuard } from "./guards/admin.guard.js";
   providers: [
     AuthService,
     JwtGuard,
+    JwtOpcionalGuard,
     AdminGuard,
     UsuariosService,
     PlazasService,

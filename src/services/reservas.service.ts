@@ -134,6 +134,13 @@ export class ReservasService {
       const duracionHoras = duracionMs / (1000 * 60 * 60);
       const precioTotal = Math.round(plaza.precioHora * duracionHoras * 100) / 100;
 
+      // Si el conductor indicó el precio mostrado previamente y este ha variado, avisar para su revisión
+      if (dto.precioTotal !== undefined && Math.abs(dto.precioTotal - precioTotal) > 0.009) {
+        throw new ConflictException(
+          `El precio de la plaza ha cambiado. El nuevo precio total es de ${precioTotal.toFixed(2)} €. Por favor, revísalo antes de solicitar.`,
+        );
+      }
+
       return tx.reserva.create({
         data: {
           usuarioId: dto.usuarioId,
@@ -297,6 +304,10 @@ export class ReservasService {
         throw new BadRequestException("No se puede modificar una reserva que ya ha sido cancelada");
       }
 
+      if (reserva.estado === EstadoReserva.RECHAZADA) {
+        throw new BadRequestException("No se puede modificar una reserva que ya ha sido rechazada");
+      }
+
       if (reserva.estado === EstadoReserva.COMPLETADA) {
         throw new BadRequestException("No se puede modificar una reserva ya completada");
       }
@@ -309,17 +320,20 @@ export class ReservasService {
           throw new ForbiddenException("No tienes permiso para gestionar esta reserva");
         }
 
-        if (esConductor && !esPropietario) {
-          if (nuevoEstado !== EstadoReserva.CANCELADA) {
-            throw new ForbiddenException("Como conductor solo tienes permiso para cancelar tu reserva");
+        // Respuesta a solicitud (Aceptar / Rechazar): Solo el propietario mientras esté PENDIENTE
+        if (nuevoEstado === EstadoReserva.CONFIRMADA || nuevoEstado === EstadoReserva.RECHAZADA) {
+          if (!esPropietario) {
+            throw new ForbiddenException("Solo el propietario de la plaza puede responder a la solicitud");
           }
-        } else if (esPropietario) {
-          if (
-            nuevoEstado !== EstadoReserva.CONFIRMADA &&
-            nuevoEstado !== EstadoReserva.CANCELADA
-          ) {
-            throw new ForbiddenException("El propietario solo puede confirmar o cancelar la reserva");
+          if (reserva.estado !== EstadoReserva.PENDIENTE) {
+            throw new BadRequestException("Solo se pueden responder solicitudes en estado PENDIENTE");
           }
+        } else if (nuevoEstado === EstadoReserva.CANCELADA) {
+          if (!esConductor && !esPropietario) {
+            throw new ForbiddenException("No tienes permiso para cancelar esta reserva");
+          }
+        } else {
+          throw new ForbiddenException("Transición de estado no permitida para tu rol");
         }
       }
 
