@@ -119,6 +119,7 @@ model CatalogoVehiculo {
 }
 
 model Plaza {
+  tipoDisponibilidad TipoDisponibilidad @default(HABITUAL)
   horario Json?
   id                 Int       @id @default(autoincrement())
   propietarioId      Int
@@ -191,4 +192,9 @@ model Reserva {
   fechaActualizacion DateTime      @updatedAt
 
   @@map("reservas")
+}
+
+enum TipoDisponibilidad {
+  HABITUAL
+  PUNTUAL
 }

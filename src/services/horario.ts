@@ -3,10 +3,11 @@ import {
   franjasDelDia,
   validarHorario,
   type Horario,
+  type TipoDisponibilidad,
 } from '../models/horario.js';
 
-export function comprobarConfiguracion(horario: Horario) {
-  const error = validarHorario(horario);
+export function comprobarConfiguracion(horario: Horario, tipo?: TipoDisponibilidad) {
+  const error = validarHorario(horario, tipo);
   if (error) throw new BadRequestException(error);
   return horario;
 }

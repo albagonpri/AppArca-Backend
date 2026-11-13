@@ -146,6 +146,36 @@ describe('Disponibilidad con PostgreSQL', () => {
     ).rejects.toThrow('solapadas');
   });
 
+  it('publica y edita fechas puntuales, sin recurrencia y respetando reservas', async () => {
+    const puntual: Horario = {
+      semana: Array.from({ length: 7 }, () => []),
+      excepciones: [{ fecha: '2090-01-10', modo: 'ofrecer', franjas: [
+        { inicio: 480, fin: 720 }, { inicio: 960, fin: 1200 },
+      ] }],
+    };
+    const plaza = await plazas.crear(usuarios[0], {
+      titulo: 'Puntual', calle: 'Calle Prueba', numero: '2', ciudad: 'Madrid',
+      codigoPostal: '28001', latitud: 40.4, longitud: -3.7, largo: 5, ancho: 2,
+      precioHora: 1, tipoDisponibilidad: 'PUNTUAL', horario: puntual,
+    });
+    expect(await plazas.obtenerPorId(plaza.id)).toMatchObject({ tipoDisponibilidad: 'PUNTUAL', horario: puntual });
+    for (const d of [dto('12:00', '13:00'), dto('09:00', '10:00', '17')])
+      await expect(reservas.crear({ ...d, plazaId: plaza.id })).rejects.toThrow('periodo');
+    await expect(plazas.actualizar(usuarios[0], plaza.id, { horario })).rejects.toThrow('puntual');
+    const turno = { ...dto('10:00', '12:00'), plazaId: plaza.id };
+    const solicitudes = await Promise.allSettled([reservas.crear(turno), reservas.crear(turno)]);
+    const aceptadas = solicitudes.filter(r => r.status === 'fulfilled');
+    expect(aceptadas).toHaveLength(1);
+    await reservas.actualizarEstadoPorUsuario(aceptadas[0].value.id, usuarios[0], false, 'CONFIRMADA');
+    const movido = { ...puntual, excepciones: [{ ...puntual.excepciones[0], fecha: '2090-01-17' }] };
+    await expect(plazas.actualizar(usuarios[0], plaza.id, { horario: movido })).rejects.toThrow('reserva');
+    const extendido = { ...puntual, excepciones: [...puntual.excepciones, ...movido.excepciones] };
+    await plazas.actualizar(usuarios[0], plaza.id, { horario: extendido });
+    await expect(reservas.crear({ ...dto('16:00', '17:00', '17'), plazaId: plaza.id })).resolves.toHaveProperty('id');
+    await plazas.actualizar(usuarios[0], plaza.id, { tipoDisponibilidad: 'HABITUAL', horario });
+    expect(await plazas.obtenerPorId(plaza.id)).toMatchObject({ tipoDisponibilidad: 'HABITUAL', horario });
+  });
+
   it('serializa el cierre de una fecha frente a una reserva simultánea', async () => {
     const plaza = await plazas.obtenerPorId(id);
     const actual = plaza.horario as Horario;

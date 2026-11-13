@@ -254,9 +254,9 @@ describe("Seguridad y Autorización en Paginación Multiusuario", () => {
         usuarioId: USUARIO_A_ID,
         plazaId: 10,
         estado: "PENDIENTE",
-        fechaInicio: new Date("2026-11-01T10:00:00Z"),
-        fechaFin: new Date("2026-11-01T12:00:00Z"),
-        plaza: { propietarioId: USUARIO_B_ID },
+        fechaInicio: new Date(Date.now() + 86400000),
+        fechaFin: new Date(Date.now() + 93600000),
+        plaza: { id: 10, disponible: true, propietarioId: USUARIO_B_ID },
       });
       mockPrisma.reserva.findFirst.mockResolvedValue(null); // Sin solapamientos confirmados
       mockPrisma.reserva.update.mockResolvedValue({
@@ -334,9 +334,9 @@ describe("Seguridad y Autorización en Paginación Multiusuario", () => {
         usuarioId: USUARIO_A_ID,
         plazaId: 20,
         estado: "PENDIENTE",
-        fechaInicio: new Date("2026-11-01T10:00:00Z"),
-        fechaFin: new Date("2026-11-01T12:00:00Z"),
-        plaza: { propietarioId: USUARIO_B_ID },
+        fechaInicio: new Date(Date.now() + 86400000),
+        fechaFin: new Date(Date.now() + 93600000),
+        plaza: { id: 20, disponible: true, propietarioId: USUARIO_B_ID },
       });
       // Existe otra reserva confirmada en ese intervalo
       mockPrisma.reserva.findFirst.mockResolvedValue({
@@ -347,7 +347,7 @@ describe("Seguridad y Autorización en Paginación Multiusuario", () => {
 
       await expect(
         reservasService.actualizarEstadoPorUsuario(504, USUARIO_B_ID, false, "CONFIRMADA" as any),
-      ).rejects.toThrow("No se puede confirmar la reserva: la plaza ya cuenta con otra reserva confirmada");
+      ).rejects.toThrow("La plaza ya cuenta con una reserva activa");
     });
   });
 });
