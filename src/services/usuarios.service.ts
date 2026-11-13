@@ -1,3 +1,4 @@
+import { conCondicionesGuardadas } from '../models/reserva.model.js';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service.js";
 import { CrearUsuarioDto } from "../dto/usuarios/crear-usuario.dto.js";
@@ -100,7 +101,7 @@ export class UsuariosService {
       this.prisma.reserva.count({ where }),
     ]);
 
-    return crearRespuestaPaginada(data, total, paginacion.page, paginacion.limit);
+    return crearRespuestaPaginada(data.map(conCondicionesGuardadas), total, paginacion.page, paginacion.limit);
   }
 
   async actualizar(id: number, data: { nombre?: string; correo?: string }) {

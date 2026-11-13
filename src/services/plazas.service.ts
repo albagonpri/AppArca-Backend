@@ -887,21 +887,24 @@ export class PlazasService {
       throw new NotFoundException("Fotografía no encontrada");
     }
 
+    // Retirar el anuncio antes de comprobar referencias para conservar las imágenes históricas.
+    await this.prisma.fotoPlaza.delete({ where: { id: fotoId } });
+    const historicas = await this.prisma.reserva.count({ where: {
+      plazaId, condicionesPlaza: { path: ['fotos'], array_contains: [{ id: fotoId }] }
+    } });
     const nombreArchivo = path.basename(foto.url);
     const directorioUploads = path.resolve(process.cwd(), "uploads", "plazas");
     const rutaCompleta = path.join(directorioUploads, nombreArchivo);
 
     try {
-      if (fs.existsSync(rutaCompleta)) {
+      if (!historicas && fs.existsSync(rutaCompleta)) {
         await fs.promises.unlink(rutaCompleta);
       }
     } catch {
       // Ignorar error al borrar archivo físico para no bloquear borrado en base de datos
     }
 
-    await this.prisma.fotoPlaza.delete({
-      where: { id: fotoId },
-    });
+
 
     return { mensaje: "Fotografía eliminada exitosamente" };
   }

@@ -1,3 +1,4 @@
+import { conCondicionesGuardadas } from '../models/reserva.model.js';
 import { isISO8601 } from 'class-validator';
 import { cubrePeriodo } from './horario.js';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
@@ -49,6 +50,43 @@ export class ReservasService {
     }
     // No debería llegar aquí, pero TypeScript lo requiere
     throw new Error("La operación no pudo completarse tras varios intentos. Inténtalo de nuevo.");
+  }
+
+  async franjasLibres(plazaId: number, fecha: string, usuarioId: number) {
+    const dia = Date.parse(fecha + 'T00:00:00Z');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !Number.isFinite(dia) || new Date(dia).toISOString().slice(0, 10) !== fecha)
+      throw new BadRequestException('Fecha inválida');
+    const plaza = await this.prisma.plaza.findUnique({ where: { id: plazaId }, select: { disponible: true, horario: true, propietarioId: true } });
+    if (!plaza) throw new NotFoundException('Plaza no encontrada');
+    const propia = plaza.propietarioId === usuarioId;
+    if (!plaza.disponible && !propia) return [];
+    const hora = 3600000;
+    const reloj = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
+    const medianoche = (utc: number) => {
+      const verano = utc - 2 * hora;
+      return reloj.format(verano) === new Date(utc).toISOString().slice(0, 10) ? verano : utc - hora;
+    };
+    const desde = propia ? medianoche(dia) : Math.max(medianoche(dia), Math.ceil(Date.now() / 60000) * 60000);
+    const hasta = medianoche(dia + 24 * hora);
+    if (desde >= hasta) return [];
+    const ocupadas = await this.prisma.reserva.findMany({
+      where: { plazaId, estado: { in: [EstadoReserva.PENDIENTE, EstadoReserva.CONFIRMADA] }, fechaInicio: { lt: new Date(hasta) }, fechaFin: { gt: new Date(desde) } },
+      select: { fechaInicio: true, fechaFin: true, estado: true }, orderBy: { fechaInicio: 'asc' }
+    });
+    const libres: { inicio: number; fin: number }[] = [];
+    if (propia) return ocupadas.map(r => ({
+      inicio: Math.max(desde, +r.fechaInicio), fin: Math.min(hasta, +r.fechaFin), estado: r.estado
+    }));
+    let indice = 0;
+    for (let t = desde; t < hasta; t += 60000) {
+      while (indice < ocupadas.length && +ocupadas[indice].fechaFin <= t) indice++;
+      if (indice < ocupadas.length && +ocupadas[indice].fechaInicio < t + 60000) continue;
+      if (!cubrePeriodo(plaza.horario, new Date(t), new Date(t + 60000))) continue;
+      const previa = libres.at(-1);
+      if (previa?.fin === t) previa.fin = t + 60000;
+      else libres.push({ inicio: t, fin: t + 60000 });
+    }
+    return libres;
   }
 
   private async comprobarPeriodo(tx: Prisma.TransactionClient, plaza: {id:number; disponible:boolean; horario?:unknown}, fechaInicio:string, fechaFin:string, excluirId?: number) {
@@ -203,7 +241,7 @@ export class ReservasService {
       this.prisma.reserva.count({ where }),
     ]);
 
-    return crearRespuestaPaginada(data, total, paginacion.page, paginacion.limit);
+    return crearRespuestaPaginada(data.map(conCondicionesGuardadas), total, paginacion.page, paginacion.limit);
   }
 
   /**
@@ -238,7 +276,7 @@ export class ReservasService {
       this.prisma.reserva.count({ where }),
     ]);
 
-    return crearRespuestaPaginada(data, total, paginacion.page, paginacion.limit);
+    return crearRespuestaPaginada(data.map(conCondicionesGuardadas), total, paginacion.page, paginacion.limit);
   }
 
   /**
@@ -269,7 +307,7 @@ export class ReservasService {
       throw new ForbiddenException("No tienes permiso para consultar esta reserva");
     }
 
-    return reserva;
+    return conCondicionesGuardadas(reserva);
   }
 
   /**
@@ -285,6 +323,7 @@ export class ReservasService {
     usuarioId: number,
     esAdmin: boolean,
     nuevoEstado: EstadoReserva,
+    motivoRechazo?: string,
   ) {
     return this.ejecutarTransaccion(async (tx) => {
       const reserva = await tx.reserva.findUnique({
@@ -312,6 +351,10 @@ export class ReservasService {
         throw new BadRequestException("No se puede modificar una reserva ya completada");
       }
 
+      if (nuevoEstado === EstadoReserva.CONFIRMADA || nuevoEstado === EstadoReserva.RECHAZADA) {
+        if (reserva.plaza.propietarioId !== usuarioId) throw new ForbiddenException("Solo el propietario puede responder a la solicitud");
+        if (reserva.estado !== EstadoReserva.PENDIENTE) throw new BadRequestException("Solo se pueden responder solicitudes en estado PENDIENTE");
+      }
       if (!esAdmin) {
         const esConductor = reserva.usuarioId === usuarioId;
         const esPropietario = reserva.plaza.propietarioId === usuarioId;
@@ -343,7 +386,7 @@ export class ReservasService {
 
       return tx.reserva.update({
         where: { id },
-        data: { estado: nuevoEstado },
+        data: { estado: nuevoEstado, ...(nuevoEstado === EstadoReserva.RECHAZADA && motivoRechazo?.trim() ? { motivoRechazo: motivoRechazo.trim() } : {}) },
         include: {
           usuario: {
             select: usuarioSelectPublico,
@@ -351,7 +394,7 @@ export class ReservasService {
           plaza: true,
           vehiculo: true,
         },
-      });
+      }).then(conCondicionesGuardadas);
     });
   }
 
@@ -365,7 +408,7 @@ export class ReservasService {
       if (pasaAActiva && (!estabaActiva || estado === EstadoReserva.CONFIRMADA)) {
         await this.comprobarPeriodo(tx, reserva.plaza, reserva.fechaInicio.toISOString(), reserva.fechaFin.toISOString(), id);
       }
-      return tx.reserva.update({where:{id},data:{estado},include:{usuario:{select:usuarioSelectPublico},plaza:true,vehiculo:true}});
+      return tx.reserva.update({where:{id},data:{estado},include:{usuario:{select:usuarioSelectPublico},plaza:true,vehiculo:true}}).then(conCondicionesGuardadas);
     });
   }
 

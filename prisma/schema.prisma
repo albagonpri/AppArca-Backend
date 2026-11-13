@@ -193,6 +193,8 @@ model Reserva {
   vehiculo           Vehiculo?     @relation(fields: [vehiculoId], references: [id], onDelete: SetNull)
   fechaInicio        DateTime
   fechaFin           DateTime
+  condicionesPlaza    Json?
+  motivoRechazo       String?       @db.VarChar(500)
   estado             EstadoReserva @default(PENDIENTE)
   precioTotal        Decimal?      @db.Decimal(10, 2)
   fechaCreacion      DateTime      @default(now())
